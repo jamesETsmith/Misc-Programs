@@ -15,8 +15,29 @@ Test file for plain cholesky decomposition of matrix.
 
 using namespace Eigen;
 
-// Helper Functions //
+// Logging Functions //
+void logg ( char const * msg ) {
+  std::cout << msg << std::endl;
+  return;
+}
 
+void logg ( int msg ) {
+  std::cout << msg << std::endl;
+  return;
+}
+
+void logg ( double d ) {
+  std::cout << d << std::endl;
+}
+
+void logg ( MatrixXd& m ) {
+  std::cout << m << std::endl;
+}
+
+void logger ( char const * msg ) {
+  std::cout << "Made it to " << msg << std::endl;
+  return;
+}
 
 // Primary Functions //
 void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
@@ -32,6 +53,7 @@ void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
           L(i,i) -= L(j,k) * L(j,k);
         }
         L(i,i) = sqrt( L(i,i) );
+        logg(L); logg("\n");
       }
 
       else {
@@ -40,6 +62,7 @@ void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
           L(i,j) -= L(i,k)*L(j,k);
         }
         L(i,j) = L(i,j)/L(j,j);
+        logg(L); logg("\n");
       }
     }
   }
@@ -48,7 +71,7 @@ void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
   return;
 }
 
-void OCCholesky ( MatrixXd M, double d, double s, double tau, MatrixXd L ) {
+void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd L ) {
   /*
   Using the algorithm in Aquilante et al. 2011. Linear Scaling Techniques in
   Computational Chemistry and Physics. Chapter 13: Cholesky Decomposition
@@ -60,9 +83,10 @@ void OCCholesky ( MatrixXd M, double d, double s, double tau, MatrixXd L ) {
   assert( n == M.cols() );
 
   // Step 1
-  MatrixXd D (n,0);
-  for ( int p=0; p < n; p++)
+  MatrixXd D(n,1);
+  for (int p=0; p < n; p++){
     D(p,0) = M(p,p);
+  }
   double D_max = D.maxCoeff();
 
   // Step 2
@@ -81,6 +105,7 @@ void OCCholesky ( MatrixXd M, double d, double s, double tau, MatrixXd L ) {
 
   // Step 5
   while ( D_max > tau ) {
+    // logger("first while loop");
     //// a
     i++;
     //// b
@@ -92,16 +117,25 @@ void OCCholesky ( MatrixXd M, double d, double s, double tau, MatrixXd L ) {
         Q.push_back( q );
       }
     }
+    // logger("5d");
     //// d
     MatrixXd M_pq (Ll.size(),Q.size());
     for (int p=0; p<Ll.size(); p++)
-      for (int q=0; Q.size(); q++) {
+      for (int q=0; q<Q.size(); q++) {
         M_pq(p,q) = M( Ll[p], Q[q] );
       }
-
+    // logger("5e");
     //// e
     MatrixXd delta_pq (Ll.size(),Q.size());
-
+    for (int p=0; p<Ll.size(); p++)
+      for (int q=0; q<Q.size(); q++) {
+        delta_pq(p,q) = M( Ll[p], Q[q] );
+        for (int J=0; J<nv; J++) {
+          delta_pq(p,q) -= L(Ll[p],J)*L(Q[q],J);
+        }
+      }
+    logg(delta_pq);
+    // logger("5f");
     //// f
     double Q_max = 0;
     int q_j = 0;
@@ -111,12 +145,15 @@ void OCCholesky ( MatrixXd M, double d, double s, double tau, MatrixXd L ) {
         Q_max = D(Q[q], 0);
       }
     }
-
+    // logger("5g");
     //// g
     int j = 0;
-
+    // logger("5h");
     //// h
     while ( j < Q.size() && Q_max > D_min ) {
+      logg("Start of inner while loop");
+      logg("js");
+      logg(j);
       ////// i
       j++;
       int J = nv + j;
@@ -125,9 +162,14 @@ void OCCholesky ( MatrixXd M, double d, double s, double tau, MatrixXd L ) {
       // ?
       ////// iii
       for (int p=0; p<Ll.size(); p++) {
+        logg("L\n"); logg(L); logg("\n");
+        // logg("Lpj");
+        // logg(L(p,J));
+        logg("Delta_pq\n"); logg(delta_pq); logg("\n");
         L(p,J) = delta_pq(p,q_j)/sqrt(Q_max); // TODO Not sure if q_j is correct here
       }
 
+      // logger("5hiv"); //TODO
       ////// iv
       for (int p=0; p<Ll.size(); p++) {
         D(p,0) -= (L(p,J) * L(p,J));
@@ -135,35 +177,38 @@ void OCCholesky ( MatrixXd M, double d, double s, double tau, MatrixXd L ) {
           delta_pq(p,q) -= L(p,J)*L(q,J);
         }
       }
-
+      // logger("5hv"); //TODO
       Q_max = 0;
       for (int q=0; q<Q.size(); q++) {
+        logg(q);
         if ( D(Q[q],0) > Q_max ){
           q_j = q;
           Q_max = D(Q[q],0);
         }
-      }
-
-      //// i
-      nv += j;
-      D_max = 0;
-      for (int p=0; p<Ll.size(); p++) {
-        if ( D(Ll[p],0) > D_max ) {
-          D_max = D(Ll[p],0);
-        }
-      }
-
-      //// k
-      Ll.clear();
-      for (int p=0; p<n; p++) {
-        if ( d*sqrt(D_max*D(p,0)) > tau ) {
-          Ll.push_back(p);
-        }
+        // logg(Q[q]); //TODO
       }
     }
+
+    logger("5i");
+    //// i
+    nv += j;
+    D_max = 0;
+    for (int p=0; p<Ll.size(); p++) {
+      if ( D(Ll[p],0) > D_max ) {
+        D_max = D(Ll[p],0);
+      }
+    }
+    logger("5k");
+    //// k
+    Ll.clear();
+    for (int p=0; p<n; p++) {
+      if ( d*sqrt(D_max*D(p,0)) > tau ) {
+        Ll.push_back(p);
+      }
+    }
+    logger("All of 5");
   }
-
-
+  logg("Done with OC");
   return;
 }
 
@@ -231,18 +276,6 @@ int main() {
   MatrixXd l(norb,norb);
   l = MatrixXd::Zero(norb,norb);
 
-  // ICCholesky( m1, l );
-
-  // std::ofstream oput ("CD_o2_1RDM.txt");
-  // if ( oput.is_open() ) {
-  //   for (int i=0; i<norb; i++) {
-  //     for (int j=0; j<norb; j++) {
-  //       oput << l(i,j) << "         ";
-  //     }
-  //     oput << std::endl;
-  //   }
-  // }
-
   // Testing
   MatrixXd A(3,3);
   A << 4,-1,2, -1,6,0, 2,0,5;
@@ -254,11 +287,24 @@ int main() {
   std::cout << l2 * l2.transpose() << std::endl << std::endl;
 
   MatrixXd l3(3,3);
+  l3 = MatrixXd::Zero(3,3);
+  logg(l3);
   OCCholesky(A,1,0,0,l3);
 
-  std::cout << l3 << std::endl;
+
 
   // TestFromEigen(A);
 
   return 0;
 }
+// ICCholesky( m1, l );
+
+// std::ofstream oput ("CD_o2_1RDM.txt");
+// if ( oput.is_open() ) {
+//   for (int i=0; i<norb; i++) {
+//     for (int j=0; j<norb; j++) {
+//       oput << l(i,j) << "         ";
+//     }
+//     oput << std::endl;
+//   }
+// }
