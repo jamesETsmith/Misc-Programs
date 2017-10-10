@@ -60,6 +60,20 @@ std::vector<size_t> sort_indexes(const std::vector<T> &v) { //TODO Correct spell
 	return idx;
 }
 
+void reorderBasis (MatrixXd& L, std::vector<size_t>& idx) {
+	for (int row=0; row<idx.size(); row++) {
+		if ( idx[row] != row ) {
+			if ( row < idx[row] ) {
+				MatrixXd tmp(L.cols(),1);
+				tmp = L.row(row);
+				L.row(row) = L.row(idx[row]);
+				L.row(idx[row]) = tmp;
+			}
+		}
+	}
+	return;
+}
+
 // Primary Functions //
 void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
 	int n = A.rows();
@@ -86,8 +100,8 @@ void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
 			}
 		}
 	}
-	std::cout << "Cholesky Decomposition of A" << std::endl << L << std::endl;
-	std::cout << std::endl;
+	// std::cout << "Cholesky Decomposition of A" << std::endl << L << std::endl;
+	// std::cout << std::endl;
 	return;
 }
 
@@ -136,7 +150,8 @@ void MyICCholesky ( MatrixXd& A, MatrixXd& L ) {
 	return;
 }
 
-void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L ) {
+void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
+  std::vector<size_t>& idx  ) {
 	/*
 	   Using the algorithm in Aquilante et al. 2011. Linear Scaling Techniques in
 	   Computational Chemistry and Physics. Chapter 13: Cholesky Decomposition
@@ -153,9 +168,10 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L ) {
 		D[p] = M(p,p);
 	}
 	double D_max = *std::max_element(D.begin(),D.end()); // TODO
-	std::vector<size_t> idx = sort_indexes(D);
-	for (int i=0; i < idx.size(); i++)
-		std::cout << D[idx[i]] << std::endl;
+	// idx = sort_indexes(D);
+	std::iota(idx.begin(), idx.end(), 0);
+	// for (int i=0; i < idx.size(); i++)
+	// std::cout << D[idx[i]] << std::endl;
 
 	// Step 2
 	std::vector<int> Ll (0);
@@ -198,7 +214,7 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L ) {
 			for (int q=0; q<Q.size(); q++) {
 				delta_pq(p,q) = M_pq(p,q);
 				for (int J=0; J<nv; J++) {
-					delta_pq(p,q) -= L(Ll[p],J)*L(Q[q],J);
+					delta_pq(p,q) -= L(idx[Ll[p]],J)*L(idx[Q[q]],J);
 				}
 			}
 
@@ -223,14 +239,14 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L ) {
 
 			////// iii
 			for (int p=0; p<Ll.size(); p++) {
-				L(Ll[p],J) = delta_pq(p,q_j)/sqrt(Q_max); // TODO Not sure if q_j is correct here
+				L(idx[Ll[p]],J) = delta_pq(p,q_j)/sqrt(Q_max); // TODO Not sure if q_j is correct here
 			}
 
 			////// iv
 			for (int p=0; p<Ll.size(); p++) {
-				D[p] -= (L(Ll[p],J) * L(Ll[p],J));
+				D[p] -= (L(idx[Ll[p]],J) * L(idx[Ll[p]],J));
 				for (int q=0; q<Q.size(); q++) {
-					delta_pq(p,q) -= L(Ll[p],J)*L(Q[q],J);
+					delta_pq(p,q) -= L(idx[Ll[p]],J)*L(idx[Q[q]],J);
 				}
 			}
 			Q_max = 0;
@@ -260,10 +276,10 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L ) {
 			}
 		}
 	}
-	std::cout.precision(6);
-	std::cout << std::fixed;
-	std::cout << "Cholesky Decomposition of M" << std::endl << L << std::endl;
-	std::cout << std::endl;
+	// std::cout.precision(6);
+	// std::cout << std::fixed;
+	// std::cout << "Cholesky Decomposition of M" << std::endl << L << std::endl;
+	// std::cout << std::endl;
 	return;
 }
 
@@ -416,6 +432,27 @@ void TestFromEigen ( MatrixXd A ) {
 	std::cout << "This should equal the matrix A" << std::endl;
 }
 
+void Calculate1RDM ( MatrixXd& m2, MatrixXd& m1, int& nelec ) {
+	int norb = m1.rows();
+
+	for (int i=0; i < norb; i++ ) {
+		for (int j=0; j < norb; j++ ) {
+			// m1(i,j) = 0;
+			// std::cout << i << " " << j << std::endl;
+			for (int k=0; k < norb; k++ ) {
+				m1(i,j) += m2(i*norb+k,j*norb+k)/(nelec-1);
+			}
+		}
+	}
+
+	double chkelec = 0;
+	for (int i=0; i < norb; i++ ) {
+		chkelec += m1(i,i);
+	}
+
+	std::cout << chkelec << std::endl; //TODO
+}
+
 /*******************************************************************************
 ******************************** Main ******************************************
 *******************************************************************************/
@@ -448,35 +485,39 @@ int main() {
 	MatrixXd m1(norb,norb);
 	m1 = MatrixXd::Zero(norb,norb);
 
-	for (int i=0; i < norb; i++ ) {
-		for (int j=0; j < norb; j++ ) {
-			// m1(i,j) = 0;
-			// std::cout << i << " " << j << std::endl;
-			for (int k=0; k < norb; k++ ) {
-				m1(i,j) += m2(i*norb+k,j*norb+k)/11;
-			}
-		}
-	}
-
-	double chkelec = 0;
-	for (int i=0; i < norb; i++ ) {
-		chkelec += m1(i,i);
-	}
-
-	// std::cout << chkelec << std::endl; //TODO
+	int nelec = 12;
+	Calculate1RDM(m2,m1,nelec);
 
 	// Cholesky Decomposition
-	// std::cout << m1 << std::endl << std::endl;
-	// MatrixXd l(norb,norb);
-	// l = MatrixXd::Zero(norb,norb);
-	// OCCholesky(m1,1,0,1e-16,l);
-	// std::cout << "Should be 0s\n" << l * l.transpose() -m1 << std::endl << std::endl;
-	//
-	// l = MatrixXd::Zero(norb,norb);
-	// MyICCholesky(m1,l);
-	// std::cout << "Should be 0s\n" << l * l.transpose() -m1  << std::endl<< std::endl;
+	std::cout << m1 << std::endl << std::endl;
+	MatrixXd l(norb,norb);
+	l = MatrixXd::Zero(norb,norb);
+	std::vector<size_t> lidx(norb);
+	OCCholesky(m1,1,0,1e-16,l,lidx);
+	reorderBasis(l,lidx);
+	std::cout << "Should be 0s\n" << l * l.transpose() -m1 << std::endl << std::endl;
 
+	MatrixXd r = MatrixXd::Random(100,100);
+	r = r * r.transpose();
+	EigenSolver<MatrixXd> es;
+	es.compute(r, /* computeEigenvectors = */ false);
+	std::cout << "The eigenvalues of A are: " << es.eigenvalues().transpose() << std::endl;
 
+	MatrixXd rd (100,100);
+	rd = MatrixXd::Zero(100,100);
+	std::vector<size_t> ridx(100);
+	OCCholesky(r,1,0,1e-10,rd,ridx);
+	reorderBasis(rd,ridx);
+	// ICCholesky(r,rd);
+	MatrixXd rnew = rd*rd.transpose() - r;
+
+	double rnorm =0;
+	for (int i=0; i<100; i++)
+		for (int j=0; j<100; j++) {
+			rnorm += rnew(i,j) * rnew(i,j);
+		}
+
+	std::cout << "Norm of random matrix " << sqrt(rnorm) << std::endl;
 	// Testing
 	// 3X3
 	// MatrixXd A(3,3);
@@ -503,14 +544,20 @@ int main() {
 	MatrixXd b1(4,4); b1.setZero(4,4);
 	MatrixXd b2(4,4); b2.setZero(4,4);
 	MatrixXd b3(4,4); b3.setZero(4,4);
-
-	OCCholesky(B,1,0,1e-10,b1);
-	std::cout << "LL^T - B (should be all zeros)\n";
+	std::vector<size_t> bidx (4);
+	OCCholesky(B,1,0,1e-10,b1,bidx);
+	std::cout << "LL^T - B (not strictly all zeros)\n";
 	std::cout << b1 * b1.transpose() - B  << std::endl;
 
-	ICCholesky(B,b2);
-	std::cout << "L^T - B (should be all zeros)\n";
-	std::cout << b2 * b2.transpose() - B << std::endl;
+	// MatrixXd ltrans(4,4);
+	reorderBasis(b1,bidx);
+	std::cout << "\nAfter basis reordering\n";
+	std::cout << b1 << std::endl << std::endl;
+	std::cout << b1 * b1.transpose() - B  << std::endl << std::endl;
+
+	// ICCholesky(B,b2);
+	// std::cout << "L^T - B (should be all zeros)\n";
+	// std::cout << b2 * b2.transpose() - B << std::endl;
 
 	// int n = B.rows();
 	// std::vector<double> D(n);
@@ -531,12 +578,27 @@ int main() {
 
 
 	// 2RDM
-	// MatrixXd t (norb*norb,norb*norb);
-	// t.setZero(norb*norb,norb*norb);
-	//
-	// OCCholesky(m2,1,0,0,t);
-	// std::cout.precision(4);
-	// std::cout << std::fixed <<  t * t.transpose() - m2 << std::endl;
+	MatrixXd t (norb*norb,norb*norb);
+	t.setZero(norb*norb,norb*norb);
+
+	std::vector<size_t> tidx (norb*norb);
+	OCCholesky(m2,1,0,1e-10,t, tidx);
+	reorderBasis(t,tidx);
+	// ICCholesky(m2,t);ss
+	std::cout.precision(4);
+	MatrixXd comp (norb*norb,norb*norb);
+
+	comp = t * t.transpose() - m2;
+	double norm = 0;
+	for (int i=0; i < norb; i++)
+	 for (int j=0; j<norb; j++)
+	   for (int k=0; k<norb; k++)
+	     for (int l=0; l<norb; l++) {
+	       norm += comp(i*norb+j,k*norb+l)*comp(i*norb+j,k*norb+l);
+	     }
+	norm = sqrt(norm);
+	std::cout << norm << std::endl;
+	// std::cout << std::fixed <<  comp << std::endl;
 
 	return 0;
 }
