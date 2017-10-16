@@ -70,6 +70,18 @@ void reorderBasis (MatrixXd& L, std::vector<size_t>& idx) {
 	return;
 }
 
+void TestFromEigen ( MatrixXd& A ) {
+	std::cout << "The matrix A is\n" << std::endl << A << std::endl;
+	LLT<MatrixXd> lltOfA(A); // compute the Cholesky decomposition of A
+	MatrixXd L = lltOfA.matrixL(); // retrieve factor L  in the decomposition
+	// The previous two lines can also be written as "L = A.llt().matrixL()"
+	std::cout << "\nThe Cholesky factor L is" << std::endl << L << std::endl;
+	std::cout <<"\nTo check this, let us compute L * L.transpose() - A\n";
+	std::cout << "\n"<<L * L.transpose() - A << std::endl;
+	std::cout << "\nThis should equal the 0 matrix" << std::endl;
+}
+
+
 // Primary Functions //
 void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
 	int n = A.rows();
@@ -101,71 +113,6 @@ void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
 	return;
 }
 
-void OCCScreened (MatrixXd& M, MatrixXd& L, std::vector<size_t>& bidx,
-	double tau ) {
-
-		// Calculate and sort diagonals
-		int n = M.rows();
-		std::vector<double> D(n);
-		for (int p=0; p < n; p++) {
-			D[p] = M(p,p);
-		}
-		bidx = sort_indexes(D); // Get sorted ordering
-		std::sort(D.begin(),D.end(),descend); // Sort vector // TODO combine these
-
-		// Screen the number of columns we are going to look at
-		int maxJ = 0;
-		for (int c=0; c<D.size(); c++) {
-			std::cout << sqrt(D[0]*D[c])<< " tau: " <<tau<<"\n\n";
-			if (sqrt(D[0]*D[c]) > tau) maxJ ++;
-		}
-
-		// Generate screened matrix that we'll decompose with standard cholesky.
-		// TODO this should get deleted in the true out of core version
-		MatrixXd Mpq(maxJ,maxJ);
-		for (int r=0; r<maxJ; r++)
-			for (int c=0; c<maxJ; c++)
-				Mpq(r,c) = M(bidx[r],bidx[c]);
-
-		// Initialize matrix to store decomposition
-		// MatrixXd L(maxJ,maxJ); L.setZero(maxJ,maxJ);
-
-		// Call Standard cholesky
-		ICCholesky(Mpq,L);
-
-		/////////////////////////
-		// Check decomposition //
-		/////////////////////////
-		MatrixXd Mp (n,n); Mp.setZero(n,n);
-		for (int r=0; r<maxJ; r++)
-			for (int c=0; c<maxJ; c++) Mp(bidx[r],bidx[c]) = L(r,c);
-
-		// Debugging //TODO
-		// Standard Output
-		if (Mp.rows() < 21) {
-			std::cout << "M\n\n" << M << "\n\n\n";
-			std::cout << "L\n\n" << L << "\n\n\n";
-		}
-		std::cout.precision(2);
-
-		//Comparison to original
-		MatrixXd comp = Mp * Mp.transpose() - M;
-		if (comp.rows() < 21) {
-			std::cout << "Comparison of L*L^dag - M\n\n";
-			std::cout << comp << "\n\n";
-		}
-
-		// Calculate Norm of Comparison
-		double norm = 0;
-		for (int r=0; r<maxJ; r++)
-			for (int c=0; c<maxJ; c++)  {
-				 norm += comp(r,c)*comp(r,c);
-			 }
-		norm = sqrt(norm);
-		std::cout << "Norm of comparison: " <<norm << "\n\n";
-		std::cout << "Number of rows truncated: " << n-maxJ << "\n\n";
-
-	}
 
 void OCC ( MatrixXd& M, double d, double s, double tau,
   std::vector< std::vector<double> >& L, std::vector<size_t>& idx  ) {
@@ -263,7 +210,7 @@ void OCC ( MatrixXd& M, double d, double s, double tau,
 
 			////// iii
 			for (int p=0; p<Ll.size(); p++) {
-				if (idx[Ll[p]] >= J )	{
+				if (idx[Ll[p]] >= J ) {
 					// std::cout << "Delta(p,q) " << delta_pq(p,q_j)/sqrt(Q_max) << "\n"; //TODO
 					// std::cout << "Idx " <<idx[Ll[p]]<<"\n";
 					L[J][ idx[Ll[p]] - J ] = delta_pq(p,q_j)/sqrt(Q_max);
@@ -289,7 +236,7 @@ void OCC ( MatrixXd& M, double d, double s, double tau,
 
 			// std::cout << "Lj\n\n";
 			// for (int i=0; i<L[J].size(); i++)
-			// 	std::cout<<L[J][i]<<std::endl;
+			//  std::cout<<L[J][i]<<std::endl;
 			// std::cout << "\n";
 			// L.push_back(Lj);
 			//TODO Remove
@@ -470,15 +417,170 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
 	return;
 }
 
-void TestFromEigen ( MatrixXd A ) {
-	std::cout << "The matrix A is" << std::endl << A << std::endl;
-	LLT<MatrixXd> lltOfA(A); // compute the Cholesky decomposition of A
-	MatrixXd L = lltOfA.matrixL(); // retrieve factor L  in the decomposition
-	// The previous two lines can also be written as "L = A.llt().matrixL()"
-	std::cout << "The Cholesky factor L is" << std::endl << L << std::endl;
-	std::cout << "To check this, let us compute L * L.transpose()" << std::endl;
-	std::cout << L * L.transpose() << std::endl;
-	std::cout << "This should equal the matrix A" << std::endl;
+
+void OCCScreened (MatrixXd& M, MatrixXd& L, std::vector<size_t>& bidx,
+  double tau ) {
+
+	TestFromEigen(M); std::cout<<"\n\n\n";
+
+	// Calculate and sort diagonals
+	int n = M.rows();
+	std::vector<double> D(n);
+	for (int p=0; p < n; p++) {
+		D[p] = M(p,p);
+	}
+
+	bidx = sort_indexes(D);   // Get sorted ordering
+	// std::sort(D.begin(),D.end(),descend);   // Sort vector // TODO combine these
+	double Dmax = *std::max_element(D.begin(),D.end()); // TODO
+
+	// Reduced set of significant diagonals
+	std::vector<size_t> Li (0);
+	for (int c=0; c<D.size(); c++) {
+		// std::cout << sqrt(Dmax*D[c])<< " tau: " <<tau<<"\n\n";
+		if (sqrt(Dmax*D[c]) > tau) Li.push_back(D[c]);
+	}
+
+	// Initialize variable outside of the loop
+	double Dmin = 0;
+	size_t macro = 0;
+	size_t nVectors = 0;
+	std::vector<size_t> Q;
+	MatrixXd Mpq;
+	MatrixXd delta_pq;
+	double Q_max;
+	size_t qj;
+	size_t micro;
+	size_t J=0;
+
+	// Macro Loop
+	while ( Dmax > tau && nVectors < n && macro < 100 ) {
+		std::cout << "Macro iter: " << macro << "  " << D[0] << "\n\n";
+
+		// Calculate minimum diagonal
+		Dmin = std::max(0.01*Dmax,tau);
+
+		// Compute set of qualified diagonals
+		Q.clear();
+		for (int c=0; c<Li.size(); c++) {
+			if ( Dmin < D[Li[c]] ) Q.push_back(Li[c]);
+		}
+
+		// Get screened and reduced matrix
+		Mpq.resize(Li.size(),Q.size()); Mpq.setZero(Li.size(),Q.size());
+
+		// Matrix to store changes in Mpq
+		delta_pq.resize(Li.size(),Q.size()); delta_pq.setZero(Li.size(),Q.size());
+		for (int p=0; p<Li.size(); p++)
+			for (int q=0; q<Q.size(); q++){
+				delta_pq(p,q) = M(bidx[p],bidx[q]);
+				for (int j=0; j< nVectors; j++) {
+					delta_pq(p,q) -= L(p,j)*L(q,j);
+				}
+			}
+
+		//Compute Largest qualified diagonal
+		Q_max = 0;
+		for (int q=0; q<Q.size(); q++) {
+			if ( D[Q[q]] > Q_max ) {
+				qj = q;
+				Q_max = D[Q[q]];
+			}
+		}
+
+		micro = 0;
+		J = 0;
+
+		// Micro loop
+		while ( micro < Q.size() && Q_max > Dmin ) {
+			std::cout << "Micro iter: " << micro << "\n\n";
+			J = nVectors + micro;
+			std::cout << "L\n" << L << "\n\n";
+			// Calculate Cholesky vector
+			for (int p=0; p< Li.size(); p++) {
+				// std::cout << delta_pq(p,qj) << "\n\n";
+				L(p,J) = delta_pq(p,qj)/sqrt(Q_max);
+			}
+
+			// Update delta matrix and diagonal
+			for (int p=0; p<Li.size(); p++) {
+				D[p] -= L(p,J)*L(p,J);
+				for (int q=0; q<Q.size(); q++) {
+					delta_pq(p,q) -= L(p,J)*L(q,J);
+				}
+			}
+
+			// Update Q_max
+			Q_max = 0;
+			for (int q=0; q<Q.size(); q++) {
+				if ( D[Q[q]] > Q_max ) {
+					qj = q;
+					Q_max = D[Q[q]];
+				}
+			}
+			micro++;
+		} // end of micro loop
+
+		nVectors += micro;
+
+		// Find new Dmax
+		Dmax = 0;
+		for (int p=0; p<Li.size(); p++) {
+			if ( D[Li[p]] > Dmax ) {
+				Dmax = D[Li[p]];
+			}
+		}
+
+		// Compute reduced set of significant diagonal elements
+		Li.clear();
+		for (int c=0; c<D.size(); c++) {
+			if (sqrt(Dmax*D[c]) > tau) Li.push_back(c);
+		}
+
+		macro ++;
+	} // end of macro
+
+
+	/////////////////////////
+	// Check decomposition //
+	/////////////////////////
+
+	EigenSolver<MatrixXd> es;
+	es.compute(M, /* computeEigenvectors = */ false);
+	std::cout << "The eigenvalues of M are:\n";
+	std::cout << es.eigenvalues().transpose() <<"\n\n";
+
+	MatrixXd Mp (n,n); Mp.setZero(n,n);
+	for (int r=0; r<L.rows(); r++)
+		for (int c=0; c<L.cols(); c++) Mp(bidx[r],bidx[c]) = L(r,c);
+
+	// Debugging //TODO
+	// Standard Output
+	if (Mp.rows() < 21) {
+		std::cout << "M\n\n" << M << "\n\n\n";
+		std::cout << "L\n\n" << L << "\n\n\n";
+	}
+	std::cout.precision(2);
+
+	//Comparison to original
+	MatrixXd comp = Mp * Mp.transpose() - M;
+	if (comp.rows() < 21) {
+		std::cout << "Comparison of L*L^dag - M\n\n";
+		std::cout << comp << "\n\n";
+	}
+
+	// Calculate Norm of Comparison
+	double norm = 0;
+	for (int r=0; r<L.rows(); r++)
+	 for (int c=0; c<L.cols(); c++)  {
+	   norm += comp(r,c)*comp(r,c);
+	 }
+	norm = sqrt(norm);
+	std::cout << "Norm of comparison: " <<norm << "\n\n";
+	std::cout << "Number of rows truncated: " << n-Li.size() << "\n\n";
+
+	// TestFromEigen(M);
+
 }
 
 void Calculate1RDM ( MatrixXd& m2, MatrixXd& m1, int& nelec ) {
@@ -600,23 +702,23 @@ int main() {
 	// 4X4
 	// MatrixXd B(4,4);
 	// B << 10, 4, 4, -4, 4, 16, 4, 2, 4, 4, 6, -2, -4, 2, -2, 4;
-	if (false) {
-		int n = 20;
+	if (true) {
+		int n = 4;
 		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
 		// std::vector<size_t> Bidx = {3,2,0,1};
 		std::vector<size_t> bidx (0);
 		MatrixXd Bcopy = B.replicate(B.rows(),B.cols());
 		MatrixXd L (n,n); L.setZero(n,n);
-		OCCScreened(B,L,bidx,1e-10);
+		OCCScreened(B,L,bidx,1e-6);
 	}
 
 
 	// 2RDM
-	MatrixXd t (norb*norb,norb*norb);
-	t.setZero(norb*norb,norb*norb);
-
-	std::vector<size_t> tidx (0);
-	OCCScreened(m2, t, tidx, 0.5);
+	// MatrixXd t (norb*norb,norb*norb);
+	// t.setZero(norb*norb,norb*norb);
+	//
+	// std::vector<size_t> tidx (0);
+	// OCCScreened(m2, t, tidx, 1e-6);
 	// reorderBasis(t,tidx);
 
 
