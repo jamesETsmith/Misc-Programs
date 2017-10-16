@@ -67,16 +67,6 @@ void reorderBasis (MatrixXd& L, std::vector<size_t>& idx) {
 		for (int j=0; j<L.cols(); j++) {
 			L(i,j) = lcopy(idx[i],idx[j]);
 		}
-	// for (int row=0; row<idx.size(); row++) {
-	//  if ( idx[row] != row ) {
-	//    if ( row < idx[row] ) {
-	//      MatrixXd tmp(L.cols(),1);
-	//      tmp = L.row(row);
-	//      L.row(row) = L.row(idx[row]);
-	//      L.row(idx[row]) = tmp;
-	//    }
-	//  }
-	// }
 	return;
 }
 
@@ -110,6 +100,47 @@ void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
 	// std::cout << std::endl;
 	return;
 }
+
+void OCCScreened (MatrixXd& M, MatrixXd& L, std::vector<size_t>& bidx,
+	double tau ) {
+
+		// Calculate and sort diagonals
+		int n = M.rows();
+		std::vector<double> D(n);
+		for (int p=0; p < n; p++) {
+			D[p] = M(p,p);
+		}
+		bidx = sort_indexes(D); // Get sorted ordering
+		std::sort(D.begin(),D.end(),descend); // Sort vector // TODO combine these
+
+		// Screen the number of columns we are going to look at
+		int maxJ = 0;
+		for (int c=0; c<D.size(); c++) {
+			if (sqrt(D[0]*D[c]) > tau) maxJ ++;
+		}
+
+		// Generate screened matrix that we'll decompose with standard cholesky.
+		// TODO this should get deleted in the true out of core version
+		MatrixXd Mpq(maxJ,maxJ);
+		for (int r=0; r<maxJ; r++)
+			for (int c=0; c<maxJ; c++)
+				Mpq(r,c) = M(bidx[r],bidx[c]);
+
+		// Initialize matrix to store decomposition
+		// MatrixXd L(maxJ,maxJ); L.setZero(maxJ,maxJ);
+
+		// Call Standard cholesky
+		ICCholesky(Mpq,L);
+
+		// Check decomposition
+		MatrixXd Mp (n,n); Mp.setZero(n,n);
+		for (int r=0; r<maxJ; r++)
+			for (int c=0; c<maxJ; c++) Mp(bidx[r],bidx[c]) = L(r,c);
+
+		std::cout << "Comparison of L*L^dag - M\n\n";
+		std::cout << Mp * Mp.transpose() - M << "\n\n";
+
+	}
 
 void OCC ( MatrixXd& M, double d, double s, double tau,
   std::vector< std::vector<double> >& L, std::vector<size_t>& idx  ) {
@@ -535,114 +566,21 @@ int main() {
 	int nelec = 12;
 	Calculate1RDM(m2,m1,nelec);
 
-	// Cholesky Decomposition
-	// 1-RDM
-	// std::cout << m1 << std::endl << std::endl;
-	// MatrixXd l(norb,norb);
-	// l = MatrixXd::Zero(norb,norb);
-	// std::vector<size_t> lidx(norb);
-	// OCCholesky(m1,1,0,1e-16,l,lidx);
-	// reorderBasis(l,lidx);
-	// std::cout << "Should be 0s\n" << l * l.transpose() -m1 << std::endl << std::endl;
-
 	// Test several random matrices
-	for (int i=20; i < 21; i++) {
-	 std::cout << "Size of random matrix " << i << "\n\n";
-	 testForRandomMatrix(i);
-	}
-
-	//// Test vector of vectors
-	// std::vector< std::vector<double> > test;
-	// for (int i=0; i<4; i++) {
-	//  std::vector<double> testi = {1,2,3,4};
-	//  test.push_back(testi);
-	// }
-	//
-	// for (int i=0; i<4; i++) {
-	//  for (int j=0; j<4; j++) {
-	//    std::cout << test[i][j];
-	//    std::cout << " ";
-	//  }
-	//  std::cout << "\n";
+	// for (int i=20; i < 21; i++) {
+	//  std::cout << "Size of random matrix " << i << "\n\n";
+	//  testForRandomMatrix(i);
 	// }
 
 	// 4X4
 	// MatrixXd B(4,4);
 	// B << 10, 4, 4, -4, 4, 16, 4, 2, 4, 4, 6, -2, -4, 2, -2, 4;
 	MatrixXd B = MatrixXd::Random(4,4); B = B*B; B = B * B.transpose();
-	EigenSolver<MatrixXd> es;
-	es.compute(B, /* computeEigenvectors = */ false);
-	std::cout << "\n\nThe eigenvalues of B are:\n";
-	std::cout << es.eigenvalues().transpose() <<"\n\n";
-	logg("\n\n\nB:\n");
-	std::cout << B << "\n\n";
-
-	// MatrixXd b3(4,4); b3.setZero(4,4);
-	std::vector< std::vector<double> > b1(0, std::vector<double> (0) );
-	std::vector<size_t> bidx (4);
-	OCC(B,1,0,1e-10,b1,bidx);
-
-	// Put data in marix to test
-	MatrixXd b1m(4,4); b1m.setZero(4,4);
-	for (int col=0; col < b1.size(); col++) {
-		for (int row=col; row < b1[0].size(); row++) {
-			b1m(row,col) = b1[col][row-col];
-		}
-	}
-
-	for (int i=0; i<bidx.size(); i++){
-		std::cout << bidx[i] << std::endl;
-	}
-
-	std::cout << "Decomposed Matrix\n\n" << b1m << "\n\n\n";
-	std::cout << "LL^T - B (not strictly all zeros)\n\n";
-	reorderBasis(b1m,bidx);
-	std::cout << "Decomposed Matrix After reordering\n\n" << b1m << "\n\n\n";
-	std::cout << "Compare to original matrix\n\n";
-	std::cout << b1m * b1m.transpose() - B  << "\n\n" <<std::endl;
-
-	MatrixXd b2(4,4); b2.setZero(4,4);
-	OCCholesky(B,1,0,1e-10,b2,bidx);
-	std::cout << "Original OCCHolesky\n" << b2 << "\n\n\n";
-	reorderBasis(b2,bidx);
-	std::cout << "Original OCCHolesky after reordering\n" << b2 << "\n\n\n";
-
-	std::cout << "LL^T - B (not strictly all zeros)\n\n";
-	std::cout << b2 * b2.transpose() - B  << std::endl;
-
-	MatrixXd b3(4,4); b3.setZero(4,4);
-	ICCholesky(B,b3);
-	std::cout << b3 << "\n\n";
-
-	//
-	// // MatrixXd ltrans(4,4);
-	// reorderBasis(b1,bidx);
-	// reorderBasis(b1,bidx);
-	// std::cout << "\nAfter basis reordering\n";
-	// std::cout << b1 << std::endl << std::endl;
-	// std::cout << "LL^T - B (shoudl be all zeros)\n";
-	// std::cout << b1 * b1.transpose() - B  << std::endl << std::endl;
-
-	// ICCholesky(B,b2);
-	// std::cout << "L^T - B (should be all zeros)\n";
-	// std::cout << b2 * b2.transpose() - B << std::endl;
-
-	// int n = B.rows();
-	// std::vector<double> D(n);
-	// for (int p=0; p <n; p++) {
-	//  D[p] = B(p,p);
-	// }
-	// std::vector<size_t> idx = sort_indexes(D);
-	// MatrixXd test(n,n);
-	// for (int a=0; a<n; a++) {
-	//  for (int b=0; b<n; b++) {
-	//    test(a,b) = B(idx[a],idx[b]);
-	//  }
-	// }
-	// ICCholesky(test,b3);
-	// std::cout << "L^T - B (should be all zeros)\n";
-	// logg(test); logg("\n");
-	// std::cout << b3 * b3.transpose() - test << std::endl;
+	// std::vector<size_t> Bidx = {3,2,0,1};
+	std::vector<size_t> bidx (0);
+	MatrixXd Bcopy = B.replicate(B.rows(),B.cols());
+	MatrixXd L (4,4); L.setZero(4,4);
+	OCCScreened(B,L,bidx,1e-10);
 
 
 	// 2RDM
