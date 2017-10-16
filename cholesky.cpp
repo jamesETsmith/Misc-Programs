@@ -116,6 +116,7 @@ void OCCScreened (MatrixXd& M, MatrixXd& L, std::vector<size_t>& bidx,
 		// Screen the number of columns we are going to look at
 		int maxJ = 0;
 		for (int c=0; c<D.size(); c++) {
+			std::cout << sqrt(D[0]*D[c])<< " tau: " <<tau<<"\n\n";
 			if (sqrt(D[0]*D[c]) > tau) maxJ ++;
 		}
 
@@ -132,13 +133,37 @@ void OCCScreened (MatrixXd& M, MatrixXd& L, std::vector<size_t>& bidx,
 		// Call Standard cholesky
 		ICCholesky(Mpq,L);
 
-		// Check decomposition
+		/////////////////////////
+		// Check decomposition //
+		/////////////////////////
 		MatrixXd Mp (n,n); Mp.setZero(n,n);
 		for (int r=0; r<maxJ; r++)
 			for (int c=0; c<maxJ; c++) Mp(bidx[r],bidx[c]) = L(r,c);
 
-		std::cout << "Comparison of L*L^dag - M\n\n";
-		std::cout << Mp * Mp.transpose() - M << "\n\n";
+		// Debugging //TODO
+		// Standard Output
+		if (Mp.rows() < 21) {
+			std::cout << "M\n\n" << M << "\n\n\n";
+			std::cout << "L\n\n" << L << "\n\n\n";
+		}
+		std::cout.precision(2);
+
+		//Comparison to original
+		MatrixXd comp = Mp * Mp.transpose() - M;
+		if (comp.rows() < 21) {
+			std::cout << "Comparison of L*L^dag - M\n\n";
+			std::cout << comp << "\n\n";
+		}
+
+		// Calculate Norm of Comparison
+		double norm = 0;
+		for (int r=0; r<maxJ; r++)
+			for (int c=0; c<maxJ; c++)  {
+				 norm += comp(r,c)*comp(r,c);
+			 }
+		norm = sqrt(norm);
+		std::cout << "Norm of comparison: " <<norm << "\n\n";
+		std::cout << "Number of rows truncated: " << n-maxJ << "\n\n";
 
 	}
 
@@ -575,36 +600,25 @@ int main() {
 	// 4X4
 	// MatrixXd B(4,4);
 	// B << 10, 4, 4, -4, 4, 16, 4, 2, 4, 4, 6, -2, -4, 2, -2, 4;
-	MatrixXd B = MatrixXd::Random(4,4); B = B*B; B = B * B.transpose();
-	// std::vector<size_t> Bidx = {3,2,0,1};
-	std::vector<size_t> bidx (0);
-	MatrixXd Bcopy = B.replicate(B.rows(),B.cols());
-	MatrixXd L (4,4); L.setZero(4,4);
-	OCCScreened(B,L,bidx,1e-10);
+	if (false) {
+		int n = 20;
+		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
+		// std::vector<size_t> Bidx = {3,2,0,1};
+		std::vector<size_t> bidx (0);
+		MatrixXd Bcopy = B.replicate(B.rows(),B.cols());
+		MatrixXd L (n,n); L.setZero(n,n);
+		OCCScreened(B,L,bidx,1e-10);
+	}
 
 
 	// 2RDM
-	// MatrixXd t (norb*norb,norb*norb);
-	// t.setZero(norb*norb,norb*norb);
-	//
-	// std::vector<size_t> tidx (norb*norb);
-	// OCCholesky(m2,1,0,1e-10,t, tidx);
+	MatrixXd t (norb*norb,norb*norb);
+	t.setZero(norb*norb,norb*norb);
+
+	std::vector<size_t> tidx (0);
+	OCCScreened(m2, t, tidx, 0.5);
 	// reorderBasis(t,tidx);
-	// // ICCholesky(m2,t);
-	// std::cout.precision(4);
-	// MatrixXd comp (norb*norb,norb*norb);
-	//
-	// comp = t * t.transpose() - m2;
-	// double norm = 0;
-	// for (int i=0; i < norb; i++)
-	//  for (int j=0; j<norb; j++)
-	//    for (int k=0; k<norb; k++)
-	//      for (int l=0; l<norb; l++) {
-	//        norm += comp(i*norb+j,k*norb+l)*comp(i*norb+j,k*norb+l);
-	//      }
-	// norm = sqrt(norm);
-	// std::cout << norm << std::endl;
-	// // std::cout << std::fixed <<  comp << std::endl;
+
 
 	return 0;
 }
