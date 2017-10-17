@@ -81,6 +81,19 @@ void TestFromEigen ( MatrixXd& A ) {
 	std::cout << "\nThis should equal the 0 matrix" << std::endl;
 }
 
+void makeLDSMatrix (MatrixXd& M) {
+	size_t n = M.rows();
+	std::cout << M << "\n\n";
+
+	for (int i=0; i<n; i++) {
+		M(i,n-2) = 1;
+		M(i,n-1) = 1;
+		M(n-2,i) = 1;
+		M(n-1,i) = 1;
+	}
+	std::cout<< M << "\n\n";
+}
+
 
 // Primary Functions //
 void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
@@ -410,10 +423,47 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
 			}
 		}
 	}
-	// std::cout.precision(6);
-	// std::cout << std::fixed;
-	// std::cout << "Cholesky Decomposition of M" << std::endl << L << std::endl;
-	// std::cout << std::endl;
+
+
+	/////////////////////////
+	// Check decomposition //
+	/////////////////////////
+
+	EigenSolver<MatrixXd> es;
+	es.compute(M, /* computeEigenvectors = */ false);
+	std::cout << "The eigenvalues of M are:\n";
+	std::cout << es.eigenvalues().transpose() <<"\n\n";
+
+	MatrixXd Mp (n,n); Mp.setZero(n,n);
+	for (int r=0; r<L.rows(); r++)
+		for (int c=0; c<L.cols(); c++) Mp(r,c)=L(r,c); //Mp(idx[r],idx[c]) = L(r,c);
+
+	reorderBasis(Mp,idx);
+
+	// Debugging //TODO
+	// Standard Output
+	if (Mp.rows() < 21) {
+		std::cout << "M\n\n" << M << "\n\n\n";
+		std::cout << "L\n\n" << L << "\n\n\n";
+	}
+	std::cout.precision(2);
+
+	//Comparison to original
+	MatrixXd comp = Mp * Mp.transpose() - M;
+	if (comp.rows() < 21) {
+		std::cout << "Comparison of L*L^dag - M\n\n";
+		std::cout << comp << "\n\n";
+	}
+
+	// Calculate Norm of Comparison
+	double norm = 0;
+	for (int r=0; r<L.rows(); r++)
+	 for (int c=0; c<L.cols(); c++)  {
+		 norm += comp(r,c)*comp(r,c);
+	 }
+	norm = sqrt(norm);
+	std::cout << "Norm of comparison: " <<norm << "\n\n";
+	std::cout << "Number of rows truncated: " << n-Ll.size() << "\n\n";
 	return;
 }
 
@@ -473,7 +523,7 @@ void OCCScreened (MatrixXd& M, MatrixXd& L, std::vector<size_t>& bidx,
 		delta_pq.resize(Li.size(),Q.size()); delta_pq.setZero(Li.size(),Q.size());
 		for (int p=0; p<Li.size(); p++)
 			for (int q=0; q<Q.size(); q++){
-				delta_pq(p,q) = M(bidx[p],bidx[q]);
+				delta_pq(p,q) = M(bidx[Li[p]],bidx[Q[q]]);
 				for (int j=0; j< nVectors; j++) {
 					delta_pq(p,q) -= L(p,j)*L(q,j);
 				}
@@ -703,13 +753,20 @@ int main() {
 	// MatrixXd B(4,4);
 	// B << 10, 4, 4, -4, 4, 16, 4, 2, 4, 4, 6, -2, -4, 2, -2, 4;
 	if (true) {
-		int n = 4;
+		int n = 6;
 		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
+		// makeLDSMatrix(B); //Make make have linear dependencies
+
 		// std::vector<size_t> Bidx = {3,2,0,1};
 		std::vector<size_t> bidx (0);
 		MatrixXd Bcopy = B.replicate(B.rows(),B.cols());
 		MatrixXd L (n,n); L.setZero(n,n);
-		OCCScreened(B,L,bidx,1e-6);
+		OCCholesky(B,1,0,1e-10,L,bidx);
+	}
+
+	if (false) {
+		int n=4;
+		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
 	}
 
 
