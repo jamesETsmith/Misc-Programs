@@ -94,6 +94,53 @@ void makeLDSMatrix (MatrixXd& M) {
 	std::cout<< M << "\n\n";
 }
 
+void checkDecomposition(MatrixXd& M, std::vector<std::vector<double> >& Lv) {
+	MatrixXd L = MatrixXd::Zero(M.rows(),M.cols());
+	for (int c=0; c<M.rows(); c++){
+		for (int r=c; r<M.rows(); r++) {
+			L(r,c) = Lv[c][r-c];
+		}
+	}
+
+	std::cout.precision(2);
+
+	// Eigenvalues to test that it's positive semidefinite
+	EigenSolver<MatrixXd> es;
+	es.compute(M, /* computeEigenvectors = */ false);
+	bool semiDef = true;
+	for (int i=0; i<M.cols(); i++) {
+		if ( es.eigenvalues()[i].real() < 0 ) {semiDef = false;}
+	}
+
+	if (!semiDef) std::cout << "Matrix isn't semidefinite!!"<<"\n\n";
+
+	if ( M.rows()<21 ) {
+		std::cout << "The eigenvalues of M are:\n";
+		std::cout << es.eigenvalues().transpose() <<"\n\n";
+
+		std::cout << "M\n\n" << M << "\n\n\n";
+		std::cout << "L\n\n" << L << "\n\n\n";
+	}
+
+	//Comparison to original
+	MatrixXd comp = L * L.transpose() - M;
+	if (comp.rows() < 21) {
+		std::cout << "Comparison of L*L^dag - M\n\n";
+		std::cout << comp << "\n\n";
+	}
+
+	// Calculate Norm of Comparison
+	double norm = 0;
+	for (int r=0; r<L.rows(); r++)
+		for (int c=0; c<L.cols(); c++)  {
+			norm += comp(r,c)*comp(r,c);
+		}
+	norm = sqrt(norm);
+	std::cout << "Norm of comparison: " <<norm << "\n";
+	std::cout << "Number of rows truncated: " << L.size()-M.rows() << "\n\n";
+
+}
+
 void checkDecomposition(MatrixXd& M, MatrixXd& L) {
 	std::cout.precision(2);
 
@@ -214,36 +261,41 @@ void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
 			}
 		}
 	}
-	// std::cout << "Cholesky Decomposition of A" << std::endl << L << std::endl;
-	// std::cout << std::endl;
+	checkDecomposition(A,L);
 	return;
 }
 
-void ICCScreened ( MatrixXd& M, MatrixXd& L, double tau ) {
+void ICCScreened ( MatrixXd& M, std::vector<std::vector<double> >& L,
+	double tau ) {
 	int n = M.rows();
 
+	// Keep in mind that the first index is the column in L!
+
 	// Cholesky-Crout (calculating one column at a time)
-	for (int c=0; c<n; c++) {
+	std::vector<double> Lc;
+	for (int c=0; c<n; c++) { //Loops over indices of M
+		Lc.resize(n-c); std::fill(Lc.begin(), Lc.end(), 0);
 		for (int r=c; r<n; r++) {
 			// Diagonals
 			if (c==r) {
-				L(c,c) = M(c,c);
+				Lc[r-c] = M(c,c);
 				for (int i=0; i<c; i++)
-					L(c,c) -= L(c,i) * L(c,i);
+					Lc[r-c] -= L[i][r-i] * L[i][r-i];
 
-				L(c,c) = sqrt(L(c,c));
-				if ( L(c,c) < tau ) {L(c,c) = 0; std::cout<<"c "<<c<<"\n\n"; break; }
+				Lc[r-c] = sqrt(Lc[r-c]);
+				if ( Lc[r-c] < tau ) { break; }
 			}
 
 			// Off-diagonals
 			else {
-				L(r,c) = M(r,c);
+				Lc[r-c] = M(r,c);
 				for (int i=0; i<c; i++)
-					L(r,c) -= L(r,i)*L(c,i);
+					Lc[r-c] -= L[i][r-i]*L[i][c-i];
 
-				L(r,c) = L(r,c)/L(c,c);
+				Lc[r-c] = Lc[r-c]/Lc[c-c];
 			}
 		}
+		L.push_back(Lc);
 	}
 
 	checkDecomposition(M,L);
@@ -653,7 +705,7 @@ int main() {
 	}
 
 	if (true) {
-		int n = 100;
+		int n = 6;
 		// Initialize Matrix
 		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
 		//Calculate Eigenvectors/values
@@ -668,15 +720,20 @@ int main() {
 		// std::cout << lam << "\n\n"; // Check that LD was introduces correctly
 		lam(n-2,n-2)=es.eigenvalues()[n-3].real();
 		lam(n-1,n-1)=es.eigenvalues()[n-4].real();
+		lam(n-5,n-5)=es.eigenvalues()[n-4].real();
 		// std::cout << lam << "\n\n"; // Check that LD was introduces correctly
 		B = es.eigenvectors().real()*lam*es.eigenvectors().transpose().real();
 
 		//Decompose
-		MatrixXd L (n,n); L.setZero(n,n);
-		for (int taue=3; taue<6; taue++) {
+		// MatrixXd L (n,n); L.setZero(n,n);
+		std::vector< std::vector<double> > L;
+		for (int taue=2; taue<3; taue++) {
+			std::cout<<"=========="<<"\n";
 			std::cout<< "Tau: 1e-"<<taue<<"\n";
 			ICCScreened(B,L,pow(10,-taue));
 		}
+		MatrixXd LL(n,n); LL.setZero(n,n); //TODO
+		ICCholesky(B,LL);
 
 	}
 
