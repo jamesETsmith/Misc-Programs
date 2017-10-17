@@ -94,8 +94,101 @@ void makeLDSMatrix (MatrixXd& M) {
 	std::cout<< M << "\n\n";
 }
 
+void checkDecomposition(MatrixXd& M, MatrixXd& L) {
+	std::cout.precision(2);
 
-// Primary Functions //
+	// Eigenvalues to test that it's positive semidefinite
+	EigenSolver<MatrixXd> es;
+	es.compute(M, /* computeEigenvectors = */ false);
+	bool semiDef = true;
+	for (int i=0; i<M.cols(); i++) {
+		if ( es.eigenvalues()[i].real() < 0 ) {semiDef = false;}
+	}
+
+	if (!semiDef) std::cout << "Matrix isn't semidefinite!!"<<"\n\n";
+
+	if ( M.rows()<21 ) {
+		std::cout << "The eigenvalues of M are:\n";
+		std::cout << es.eigenvalues().transpose() <<"\n\n";
+
+		std::cout << "M\n\n" << M << "\n\n\n";
+		std::cout << "L\n\n" << L << "\n\n\n";
+	}
+
+	//Comparison to original
+	MatrixXd comp = L * L.transpose() - M;
+	if (comp.rows() < 21) {
+		std::cout << "Comparison of L*L^dag - M\n\n";
+		std::cout << comp << "\n\n";
+	}
+
+	// Calculate Norm of Comparison
+	double norm = 0;
+	for (int r=0; r<L.rows(); r++)
+		for (int c=0; c<L.cols(); c++)  {
+			norm += comp(r,c)*comp(r,c);
+		}
+	norm = sqrt(norm);
+	std::cout << "Norm of comparison: " <<norm << "\n";
+	std::cout << "Number of rows truncated: " << L.cols()-M.cols() << "\n\n";
+
+}
+
+void checkDecomposition(MatrixXd& M, MatrixXd& L, std::vector<double>& D,
+  std::vector<int>& Ll, std::vector<size_t>& idx, int n, int nv) {
+
+	if(n<21) {
+		EigenSolver<MatrixXd> es;
+		es.compute(M, /* computeEigenvectors = */ false);
+		std::cout << "The eigenvalues of M are:\n";
+		std::cout << es.eigenvalues().transpose() <<"\n\n";
+
+		// Print out ordering
+		std::cout << "Index Dictionary\n";
+		for (int i=0; i<n; i++) std::cout<<idx[i]<<" ";
+		std::cout << "\n\n";
+
+		// Print D
+		std::cout << "Diagonals\n";
+		for (int i=0; i<n; i++) std::cout<<D[idx[Ll[i]]]<<" ";
+		std::cout << "\n\n";
+	}
+
+	MatrixXd Mp (n,n); Mp.setZero(n,n);
+	for (int r=0; r<L.rows(); r++)
+		for (int c=0; c<L.cols(); c++) Mp(idx[r],idx[c]) = L(r,c);    //Mp(r,c)=L(r,c); //
+
+	// reorderBasis(Mp,idx);
+
+	// Debugging //TODO
+	// Standard Output
+	if (Mp.rows() < 21) {
+		std::cout << "M\n\n" << M << "\n\n\n";
+		std::cout << "L\n\n" << L << "\n\n\n";
+	}
+	std::cout.precision(2);
+
+	//Comparison to original
+	MatrixXd comp = Mp * Mp.transpose() - M;
+	if (comp.rows() < 21) {
+		std::cout << "Comparison of L*L^dag - M\n\n";
+		std::cout << comp << "\n\n";
+	}
+
+	// Calculate Norm of Comparison
+	double norm = 0;
+	for (int r=0; r<L.rows(); r++)
+		for (int c=0; c<L.cols(); c++)  {
+			norm += comp(r,c)*comp(r,c);
+		}
+	norm = sqrt(norm);
+	std::cout << "Norm of comparison: " <<norm << "\n";
+	std::cout << "Number of rows truncated: " << n-nv << "\n\n";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Primary Functions ///////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
 	int n = A.rows();
 	assert( n == A.cols() );
@@ -123,6 +216,37 @@ void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
 	}
 	// std::cout << "Cholesky Decomposition of A" << std::endl << L << std::endl;
 	// std::cout << std::endl;
+	return;
+}
+
+void ICCScreened ( MatrixXd& M, MatrixXd& L, double tau ) {
+	int n = M.rows();
+
+	// Cholesky-Crout (calculating one column at a time)
+	for (int c=0; c<n; c++) {
+		for (int r=c; r<n; r++) {
+			// Diagonals
+			if (c==r) {
+				L(c,c) = M(c,c);
+				for (int i=0; i<c; i++)
+					L(c,c) -= L(c,i) * L(c,i);
+
+				L(c,c) = sqrt(L(c,c));
+				if ( L(c,c) < tau ) {L(c,c) = 0; std::cout<<"c "<<c<<"\n\n"; break; }
+			}
+
+			// Off-diagonals
+			else {
+				L(r,c) = M(r,c);
+				for (int i=0; i<c; i++)
+					L(r,c) -= L(r,i)*L(c,i);
+
+				L(r,c) = L(r,c)/L(c,c);
+			}
+		}
+	}
+
+	checkDecomposition(M,L);
 	return;
 }
 
@@ -361,10 +485,10 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
 		for (int p=0; p<Ll.size(); p++)
 			for (int q=0; q<Q.size(); q++) { // sorted indices
 				// if (Ll[p] >= Q[q] ) {
-					delta_pq(Ll[p],Q[q]) = M_pq(Ll[p],Q[q]);
-					for (int J=0; J<nv; J++) {
-						delta_pq(Ll[p],Q[q]) -= L(Ll[p],J)*L(Q[q],J); //sorted indices
-					}
+				delta_pq(Ll[p],Q[q]) = M_pq(Ll[p],Q[q]);
+				for (int J=0; J<nv; J++) {
+					delta_pq(Ll[p],Q[q]) -= L(Ll[p],J)*L(Q[q],J);   //sorted indices
+				}
 				// }
 			}
 
@@ -425,58 +549,7 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
 			}
 		}
 	}
-
-
-	/////////////////////////
-	// Check decomposition //
-	/////////////////////////
-	if(n<21) {
-		EigenSolver<MatrixXd> es;
-		es.compute(M, /* computeEigenvectors = */ false);
-		std::cout << "The eigenvalues of M are:\n";
-		std::cout << es.eigenvalues().transpose() <<"\n\n";
-
-		// Print out ordering
-		std::cout << "Index Dictionary\n";
-		for (int i=0;i<n;i++) std::cout<<idx[i]<<" ";
-		std::cout << "\n\n";
-
-		// Print D
-		std::cout << "Diagonals\n";
-		for (int i=0;i<n;i++) std::cout<<D[idx[Ll[i]]]<<" ";
-		std::cout << "\n\n";
-	}
-
-	MatrixXd Mp (n,n); Mp.setZero(n,n);
-	for (int r=0; r<L.rows(); r++)
-		for (int c=0; c<L.cols(); c++) Mp(idx[r],idx[c]) = L(r,c);//Mp(r,c)=L(r,c); //
-
-	// reorderBasis(Mp,idx);
-
-	// Debugging //TODO
-	// Standard Output
-	if (Mp.rows() < 21) {
-		std::cout << "M\n\n" << M << "\n\n\n";
-		std::cout << "L\n\n" << L << "\n\n\n";
-	}
-	std::cout.precision(2);
-
-	//Comparison to original
-	MatrixXd comp = Mp * Mp.transpose() - M;
-	if (comp.rows() < 21) {
-		std::cout << "Comparison of L*L^dag - M\n\n";
-		std::cout << comp << "\n\n";
-	}
-
-	// Calculate Norm of Comparison
-	double norm = 0;
-	for (int r=0; r<L.rows(); r++)
-	 for (int c=0; c<L.cols(); c++)  {
-		 norm += comp(r,c)*comp(r,c);
-	 }
-	norm = sqrt(norm);
-	std::cout << "Norm of comparison: " <<norm << "\n";
-	std::cout << "Number of rows truncated: " << n-nv << "\n\n";
+	checkDecomposition(M,L,D,Ll,idx,n,nv);
 	return;
 }
 
@@ -505,27 +578,13 @@ void Calculate1RDM ( MatrixXd& m2, MatrixXd& m1, int& nelec ) {
 void testForRandomMatrix ( int rn ) {
 	MatrixXd r = MatrixXd::Random(rn,rn);
 	r = r * r.transpose();
-	// std::cout << "R\n" << r << std::endl;
 
-	// Eigenvalues
-	// EigenSolver<MatrixXd> es;
-	// es.compute(r, /* computeEigenvectors = */ false);
-	// std::cout << "The eigenvalues of A are:\n";
-	// std::cout << es.eigenvalues().transpose() <<"\n\n";
-
-	// Decomposition
-	// rd = MatrixXd::Zero(rn,rn);
 	std::vector< std::vector<double> > rdv( 0, std::vector<double> (0) );
 	std::vector<size_t> ridx(rn);
 	MatrixXd rd (rn,rn); rd.setZero(rn,rn);
 	OCC(r,1,0,1e-16,rdv,ridx);
 
-	// std::cout << "Indices to Reorder\n";
-	// for (int i=0; i<rn; i++)
-	//  std::cout<< ridx[i] << " , " << std::endl;
 	std::cout << "\n\n";
-
-	// Convert vector<vector> to MatrixXd
 
 	for (int col=0; col < rdv.size(); col++) {
 		std::cout << "Size of Cholesky vector " << rdv[col].size() << std::endl;
@@ -533,26 +592,7 @@ void testForRandomMatrix ( int rn ) {
 			rd(row,col) = rdv[col][row-col];
 		}
 	}
-	std::cout << "Decomposed Matrix\n\n" << rd <<"\n";
-	reorderBasis(rd,ridx);
 
-
-	MatrixXd rnew = rd*rd.transpose() - r;
-	std::cout << "R_{new}\n" << rnew << std::endl;
-
-	double rnorm =0;
-	for (int i=0; i<rn; i++)
-		for (int j=0; j<rn; j++) {
-			rnorm += rnew(i,j) * rnew(i,j);
-		}
-
-	std::cout << "Norm of random matrix " << sqrt(rnorm) << std::endl;
-
-	MatrixXd rdnew (rn,rn); rdnew.setZero(rn,rn);
-	OCCholesky(r,1,0,1e-16,rdnew,ridx);
-	std::cout << rdnew << std::endl;
-	reorderBasis(rdnew,ridx);
-	std::cout<< "OCC Comparison\n\n" << rdnew << std::endl;
 	return;
 }
 
@@ -598,7 +638,7 @@ int main() {
 	// }
 
 	// 4X4
-	if (true) {
+	if (false) {
 		int n = 6;
 		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
 
@@ -612,9 +652,37 @@ int main() {
 		// OCCScreened(B,L,bidx,1e-10);
 	}
 
+	if (true) {
+		int n = 100;
+		// Initialize Matrix
+		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
+		//Calculate Eigenvectors/values
+		EigenSolver<MatrixXd> es(B);
+
+		//Change Eigenvalues to turn on degeneracy
+		MatrixXd lam = MatrixXd::Zero(n,n);
+		for (int r=0; r<n; r++)
+			for (int c=0; c<n; c++) {
+				if (r==c) {lam(c,c)=es.eigenvalues()[c].real(); }
+			}
+		// std::cout << lam << "\n\n"; // Check that LD was introduces correctly
+		lam(n-2,n-2)=es.eigenvalues()[n-3].real();
+		lam(n-1,n-1)=es.eigenvalues()[n-4].real();
+		// std::cout << lam << "\n\n"; // Check that LD was introduces correctly
+		B = es.eigenvectors().real()*lam*es.eigenvectors().transpose().real();
+
+		//Decompose
+		MatrixXd L (n,n); L.setZero(n,n);
+		for (int taue=3; taue<6; taue++) {
+			std::cout<< "Tau: 1e-"<<taue<<"\n";
+			ICCScreened(B,L,pow(10,-taue));
+		}
+
+	}
+
 
 	// 2RDM
-	if (false){
+	if (false) {
 		std::cout <<"2RDM Test\n============\n\n";
 		MatrixXd t (norb*norb,norb*norb);
 		t.setZero(norb*norb,norb*norb);
@@ -622,7 +690,7 @@ int main() {
 		std::vector<size_t> tidx (0);
 		for (int taue=1; taue<11; taue++) {
 			std::cout<< "Tau: 1e-"<<taue<<"\n";
-			OCCholesky(m2, 1,0, pow(10,-taue) , t, tidx);
+			OCCholesky(m2, 1,0, pow(10,-taue), t, tidx);
 		}
 	}
 	// reorderBasis(t,tidx);
