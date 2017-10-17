@@ -322,9 +322,9 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
 
 	// Step 2
 	std::vector<int> Ll (0);
-	for (int p=0; p<n; p++) {
-		if ( d * sqrt(D_max*D[p]) > tau ) {
-			Ll.push_back( p );
+	for (int p=0; p<n; p++) { //iterate over sorted indices
+		if ( d * sqrt(D_max*D[idx[p]]) > tau ) {
+			Ll.push_back( p ); //store sorted indices
 		}
 	}
 
@@ -342,36 +342,39 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
 		double D_min = std::max(s*D_max,tau);
 		//// c
 		std::vector<int> Q (0);
-		for (int q=0; q<Ll.size(); q++) {
-			if ( D[Ll[q]] > D_min ) {
-				Q.push_back( q );
+		for (int q=0; q<Ll.size(); q++) { // iterate over sorted indices
+			if ( D[idx[Ll[q]]] > D_min ) { //convert back to unsorted to access
+				Q.push_back( q ); // store sorted indices
 			}
 		}
 
 		//// d
 		MatrixXd M_pq (Ll.size(),Q.size());
 		for (int p=0; p<Ll.size(); p++)
-			for (int q=0; q<Q.size(); q++) {
-				M_pq(p,q) = M( Ll[p], Q[q] );
+			for (int q=0; q<Q.size(); q++) { // iterate over sorted
+				M_pq(Ll[p],Q[q]) = M( idx[Ll[p]], idx[Q[q]] ); // conver back to unsorted
 			}
 
 		//// e
 		MatrixXd delta_pq (Ll.size(),Q.size());
+		delta_pq.setZero(Ll.size(),Q.size());
 		for (int p=0; p<Ll.size(); p++)
-			for (int q=0; q<Q.size(); q++) {
-				delta_pq(p,q) = M_pq(p,q);
-				for (int J=0; J<nv; J++) {
-					delta_pq(p,q) -= L(idx[Ll[p]],J)*L(idx[Q[q]],J);
-				}
+			for (int q=0; q<Q.size(); q++) { // sorted indices
+				// if (Ll[p] >= Q[q] ) {
+					delta_pq(Ll[p],Q[q]) = M_pq(Ll[p],Q[q]);
+					for (int J=0; J<nv; J++) {
+						delta_pq(Ll[p],Q[q]) -= L(Ll[p],J)*L(Q[q],J); //sorted indices
+					}
+				// }
 			}
 
 		//// f
 		double Q_max = 0;
 		int q_j = 0;
-		for (int q=0; q<Q.size(); q++) {
-			if ( D[Q[q]] > Q_max ) {
+		for (int q=0; q<Q.size(); q++) { //sorted indices
+			if ( D[idx[Q[q]]] > Q_max ) {
 				q_j = q;
-				Q_max = D[Q[q]];
+				Q_max = D[idx[Q[q]]];
 			}
 		}
 		//// g
@@ -381,26 +384,25 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
 			////// i
 			int J = nv + j;
 
-			////// ii
-			// logg(L); logg("\n");
-
 			////// iii
-			for (int p=0; p<Ll.size(); p++) {
-				L(idx[Ll[p]],J) = delta_pq(p,q_j)/sqrt(Q_max); // TODO Not sure if q_j is correct here
+			std::cout << delta_pq << "\n\n"; //TODO
+			for (int p=0; p<Ll.size(); p++) { //sorted
+				L(Ll[p],J) = delta_pq(Ll[p],q_j)/sqrt(Q_max);
 			}
 
 			////// iv
-			for (int p=0; p<Ll.size(); p++) {
-				D[p] -= (L(idx[Ll[p]],J) * L(idx[Ll[p]],J));
-				for (int q=0; q<Q.size(); q++) {
-					delta_pq(p,q) -= L(idx[Ll[p]],J)*L(idx[Q[q]],J);
+			for (int p=0; p<Ll.size(); p++) { //sorted
+				D[idx[p]] -= (L(Ll[p],J) * L(Ll[p],J)); //convert back to unsorted
+				for (int q=0; q<Q.size(); q++) { //sorted
+					// if (Ll[p] >= Q[q] ) delta_pq(Ll[p],Q[q]) -= L(Ll[p],J)*L(Q[q],J);//TODO
+					delta_pq(Ll[p],Q[q]) -= L(Ll[p],J)*L(Q[q],J);
 				}
 			}
 			Q_max = 0;
 			for (int q=0; q<Q.size(); q++) {
-				if ( D[Q[q]] > Q_max ) {
+				if ( D[idx[Q[q]]] > Q_max ) {
 					q_j = q;
-					Q_max = D[Q[q]];
+					Q_max = D[idx[Q[q]]];
 				}
 			}
 			j++;
@@ -409,16 +411,16 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
 		//// i
 		nv += j;
 		D_max = 0;
-		for (int p=0; p<Ll.size(); p++) {
-			if ( D[Ll[p]] > D_max ) {
-				D_max = D[Ll[p]];
+		for (int p=0; p<Ll.size(); p++) { // sorted
+			if ( D[idx[Ll[p]]] > D_max ) {
+				D_max = D[idx[Ll[p]]];
 			}
 		}
 
 		//// k
 		Ll.clear();
-		for (int p=0; p<n; p++) {
-			if ( d*sqrt(D_max*D[Ll[p]]) > tau ) {
+		for (int p=0; p<n; p++) { //sorted
+			if ( d*sqrt(D_max*D[idx[Ll[p]]]) > tau ) {
 				Ll.push_back(p);
 			}
 		}
@@ -428,17 +430,28 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
 	/////////////////////////
 	// Check decomposition //
 	/////////////////////////
+	if(n<21) {
+		EigenSolver<MatrixXd> es;
+		es.compute(M, /* computeEigenvectors = */ false);
+		std::cout << "The eigenvalues of M are:\n";
+		std::cout << es.eigenvalues().transpose() <<"\n\n";
 
-	EigenSolver<MatrixXd> es;
-	es.compute(M, /* computeEigenvectors = */ false);
-	std::cout << "The eigenvalues of M are:\n";
-	std::cout << es.eigenvalues().transpose() <<"\n\n";
+		// Print out ordering
+		std::cout << "Index Dictionary\n";
+		for (int i=0;i<n;i++) std::cout<<idx[i]<<" ";
+		std::cout << "\n\n";
+
+		// Print D
+		std::cout << "Diagonals\n";
+		for (int i=0;i<n;i++) std::cout<<D[idx[Ll[i]]]<<" ";
+		std::cout << "\n\n";
+	}
 
 	MatrixXd Mp (n,n); Mp.setZero(n,n);
 	for (int r=0; r<L.rows(); r++)
-		for (int c=0; c<L.cols(); c++) Mp(r,c)=L(r,c); //Mp(idx[r],idx[c]) = L(r,c);
+		for (int c=0; c<L.cols(); c++) Mp(idx[r],idx[c]) = L(r,c);//Mp(r,c)=L(r,c); //
 
-	reorderBasis(Mp,idx);
+	// reorderBasis(Mp,idx);
 
 	// Debugging //TODO
 	// Standard Output
@@ -462,176 +475,11 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
 		 norm += comp(r,c)*comp(r,c);
 	 }
 	norm = sqrt(norm);
-	std::cout << "Norm of comparison: " <<norm << "\n\n";
-	std::cout << "Number of rows truncated: " << n-Ll.size() << "\n\n";
+	std::cout << "Norm of comparison: " <<norm << "\n";
+	std::cout << "Number of rows truncated: " << n-nv << "\n\n";
 	return;
 }
 
-
-void OCCScreened (MatrixXd& M, MatrixXd& L, std::vector<size_t>& bidx,
-  double tau ) {
-
-	TestFromEigen(M); std::cout<<"\n\n\n";
-
-	// Calculate and sort diagonals
-	int n = M.rows();
-	std::vector<double> D(n);
-	for (int p=0; p < n; p++) {
-		D[p] = M(p,p);
-	}
-
-	bidx = sort_indexes(D);   // Get sorted ordering
-	// std::sort(D.begin(),D.end(),descend);   // Sort vector // TODO combine these
-	double Dmax = *std::max_element(D.begin(),D.end()); // TODO
-
-	// Reduced set of significant diagonals
-	std::vector<size_t> Li (0);
-	for (int c=0; c<D.size(); c++) {
-		// std::cout << sqrt(Dmax*D[c])<< " tau: " <<tau<<"\n\n";
-		if (sqrt(Dmax*D[c]) > tau) Li.push_back(D[c]);
-	}
-
-	// Initialize variable outside of the loop
-	double Dmin = 0;
-	size_t macro = 0;
-	size_t nVectors = 0;
-	std::vector<size_t> Q;
-	MatrixXd Mpq;
-	MatrixXd delta_pq;
-	double Q_max;
-	size_t qj;
-	size_t micro;
-	size_t J=0;
-
-	// Macro Loop
-	while ( Dmax > tau && nVectors < n && macro < 100 ) {
-		std::cout << "Macro iter: " << macro << "  " << D[0] << "\n\n";
-
-		// Calculate minimum diagonal
-		Dmin = std::max(0.01*Dmax,tau);
-
-		// Compute set of qualified diagonals
-		Q.clear();
-		for (int c=0; c<Li.size(); c++) {
-			if ( Dmin < D[Li[c]] ) Q.push_back(Li[c]);
-		}
-
-		// Get screened and reduced matrix
-		Mpq.resize(Li.size(),Q.size()); Mpq.setZero(Li.size(),Q.size());
-
-		// Matrix to store changes in Mpq
-		delta_pq.resize(Li.size(),Q.size()); delta_pq.setZero(Li.size(),Q.size());
-		for (int p=0; p<Li.size(); p++)
-			for (int q=0; q<Q.size(); q++){
-				delta_pq(p,q) = M(bidx[Li[p]],bidx[Q[q]]);
-				for (int j=0; j< nVectors; j++) {
-					delta_pq(p,q) -= L(p,j)*L(q,j);
-				}
-			}
-
-		//Compute Largest qualified diagonal
-		Q_max = 0;
-		for (int q=0; q<Q.size(); q++) {
-			if ( D[Q[q]] > Q_max ) {
-				qj = q;
-				Q_max = D[Q[q]];
-			}
-		}
-
-		micro = 0;
-		J = 0;
-
-		// Micro loop
-		while ( micro < Q.size() && Q_max > Dmin ) {
-			std::cout << "Micro iter: " << micro << "\n\n";
-			J = nVectors + micro;
-			std::cout << "L\n" << L << "\n\n";
-			// Calculate Cholesky vector
-			for (int p=0; p< Li.size(); p++) {
-				// std::cout << delta_pq(p,qj) << "\n\n";
-				L(p,J) = delta_pq(p,qj)/sqrt(Q_max);
-			}
-
-			// Update delta matrix and diagonal
-			for (int p=0; p<Li.size(); p++) {
-				D[p] -= L(p,J)*L(p,J);
-				for (int q=0; q<Q.size(); q++) {
-					delta_pq(p,q) -= L(p,J)*L(q,J);
-				}
-			}
-
-			// Update Q_max
-			Q_max = 0;
-			for (int q=0; q<Q.size(); q++) {
-				if ( D[Q[q]] > Q_max ) {
-					qj = q;
-					Q_max = D[Q[q]];
-				}
-			}
-			micro++;
-		} // end of micro loop
-
-		nVectors += micro;
-
-		// Find new Dmax
-		Dmax = 0;
-		for (int p=0; p<Li.size(); p++) {
-			if ( D[Li[p]] > Dmax ) {
-				Dmax = D[Li[p]];
-			}
-		}
-
-		// Compute reduced set of significant diagonal elements
-		Li.clear();
-		for (int c=0; c<D.size(); c++) {
-			if (sqrt(Dmax*D[c]) > tau) Li.push_back(c);
-		}
-
-		macro ++;
-	} // end of macro
-
-
-	/////////////////////////
-	// Check decomposition //
-	/////////////////////////
-
-	EigenSolver<MatrixXd> es;
-	es.compute(M, /* computeEigenvectors = */ false);
-	std::cout << "The eigenvalues of M are:\n";
-	std::cout << es.eigenvalues().transpose() <<"\n\n";
-
-	MatrixXd Mp (n,n); Mp.setZero(n,n);
-	for (int r=0; r<L.rows(); r++)
-		for (int c=0; c<L.cols(); c++) Mp(bidx[r],bidx[c]) = L(r,c);
-
-	// Debugging //TODO
-	// Standard Output
-	if (Mp.rows() < 21) {
-		std::cout << "M\n\n" << M << "\n\n\n";
-		std::cout << "L\n\n" << L << "\n\n\n";
-	}
-	std::cout.precision(2);
-
-	//Comparison to original
-	MatrixXd comp = Mp * Mp.transpose() - M;
-	if (comp.rows() < 21) {
-		std::cout << "Comparison of L*L^dag - M\n\n";
-		std::cout << comp << "\n\n";
-	}
-
-	// Calculate Norm of Comparison
-	double norm = 0;
-	for (int r=0; r<L.rows(); r++)
-	 for (int c=0; c<L.cols(); c++)  {
-	   norm += comp(r,c)*comp(r,c);
-	 }
-	norm = sqrt(norm);
-	std::cout << "Norm of comparison: " <<norm << "\n\n";
-	std::cout << "Number of rows truncated: " << n-Li.size() << "\n\n";
-
-	// TestFromEigen(M);
-
-}
 
 void Calculate1RDM ( MatrixXd& m2, MatrixXd& m1, int& nelec ) {
 	int norb = m1.rows();
@@ -750,32 +598,33 @@ int main() {
 	// }
 
 	// 4X4
-	// MatrixXd B(4,4);
-	// B << 10, 4, 4, -4, 4, 16, 4, 2, 4, 4, 6, -2, -4, 2, -2, 4;
 	if (true) {
 		int n = 6;
 		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
-		// makeLDSMatrix(B); //Make make have linear dependencies
 
-		// std::vector<size_t> Bidx = {3,2,0,1};
+		// MatrixXd B(4,4);
+		// B << 10, 4, 4, -4, 4, 16, 4, 2, 4, 4, 6, -2, -4, 2, -2, 4;
+		// std::cout << B << "\n\n";
+
 		std::vector<size_t> bidx (0);
-		MatrixXd Bcopy = B.replicate(B.rows(),B.cols());
 		MatrixXd L (n,n); L.setZero(n,n);
 		OCCholesky(B,1,0,1e-10,L,bidx);
-	}
-
-	if (false) {
-		int n=4;
-		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
+		// OCCScreened(B,L,bidx,1e-10);
 	}
 
 
 	// 2RDM
-	// MatrixXd t (norb*norb,norb*norb);
-	// t.setZero(norb*norb,norb*norb);
-	//
-	// std::vector<size_t> tidx (0);
-	// OCCScreened(m2, t, tidx, 1e-6);
+	if (false){
+		std::cout <<"2RDM Test\n============\n\n";
+		MatrixXd t (norb*norb,norb*norb);
+		t.setZero(norb*norb,norb*norb);
+
+		std::vector<size_t> tidx (0);
+		for (int taue=1; taue<11; taue++) {
+			std::cout<< "Tau: 1e-"<<taue<<"\n";
+			OCCholesky(m2, 1,0, pow(10,-taue) , t, tidx);
+		}
+	}
 	// reorderBasis(t,tidx);
 
 
