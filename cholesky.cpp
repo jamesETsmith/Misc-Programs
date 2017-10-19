@@ -94,22 +94,26 @@ void makeLDSMatrix (MatrixXd& M) {
 	std::cout<< M << "\n\n";
 }
 
-void checkDecomposition(MatrixXd& M, std::vector<std::vector<double> >& Lv) {
+void checkDecomposition(MatrixXd& M, std::vector<std::vector<double> >& Lv,
+  int nv) {
+
 	MatrixXd L = MatrixXd::Zero(M.rows(),M.cols());
-	for (int c=0; c<M.rows(); c++){
+	for (int c=0; c<M.rows(); c++) {
 		for (int r=c; r<M.rows(); r++) {
 			L(r,c) = Lv[c][r-c];
 		}
 	}
 
-	std::cout.precision(2);
+	// std::cout.precision(2);
 
 	// Eigenvalues to test that it's positive semidefinite
 	EigenSolver<MatrixXd> es;
 	es.compute(M, /* computeEigenvectors = */ false);
 	bool semiDef = true;
 	for (int i=0; i<M.cols(); i++) {
-		if ( es.eigenvalues()[i].real() < 0 ) {semiDef = false;}
+		if ( es.eigenvalues()[i].real() < 0 ) {semiDef = false; }
+		if ( es.eigenvalues()[i].imag() < 0 ) {semiDef = false; }
+
 	}
 
 	if (!semiDef) std::cout << "Matrix isn't semidefinite!!"<<"\n\n";
@@ -137,19 +141,18 @@ void checkDecomposition(MatrixXd& M, std::vector<std::vector<double> >& Lv) {
 		}
 	norm = sqrt(norm);
 	std::cout << "Norm of comparison: " <<norm << "\n";
-	std::cout << "Number of rows truncated: " << L.size()-M.rows() << "\n\n";
-
+	std::cout << "Number of rows truncated: " << M.rows() - nv << "\n\n";
 }
 
 void checkDecomposition(MatrixXd& M, MatrixXd& L) {
-	std::cout.precision(2);
+	// std::cout.precision(2);
 
 	// Eigenvalues to test that it's positive semidefinite
 	EigenSolver<MatrixXd> es;
 	es.compute(M, /* computeEigenvectors = */ false);
 	bool semiDef = true;
 	for (int i=0; i<M.cols(); i++) {
-		if ( es.eigenvalues()[i].real() < 0 ) {semiDef = false;}
+		if ( es.eigenvalues()[i].real() < 0 ) {semiDef = false; }
 	}
 
 	if (!semiDef) std::cout << "Matrix isn't semidefinite!!"<<"\n\n";
@@ -266,9 +269,9 @@ void ICCholesky ( MatrixXd& A, MatrixXd& L ) {
 }
 
 void ICCScreened ( MatrixXd& M, std::vector<std::vector<double> >& L,
-	double tau ) {
+  double tau ) {
 	int n = M.rows();
-
+	int nv = n; //# of Cholesky Vectors
 	// Keep in mind that the first index is the column in L!
 
 	// Cholesky-Crout (calculating one column at a time)
@@ -283,7 +286,7 @@ void ICCScreened ( MatrixXd& M, std::vector<std::vector<double> >& L,
 					Lc[r-c] -= L[i][r-i] * L[i][r-i];
 
 				Lc[r-c] = sqrt(Lc[r-c]);
-				if ( Lc[r-c] < tau ) { break; }
+				if ( Lc[r-c] < tau ) { nv-=1; /*std::cout<<"c "<<c<<"\n\n";*/ break; }
 			}
 
 			// Off-diagonals
@@ -298,7 +301,7 @@ void ICCScreened ( MatrixXd& M, std::vector<std::vector<double> >& L,
 		L.push_back(Lc);
 	}
 
-	checkDecomposition(M,L);
+	checkDecomposition(M,L,nv);
 	return;
 }
 
@@ -605,6 +608,132 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
 	return;
 }
 
+void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
+	size_t n = A.rows();
+	std::vector<size_t> piv (n); // Pivot vector
+	std::vector<double> dots(n); // Store accumulated dot products
+	std::iota(piv.begin(), piv.end(), 0); // Fill pivot vector
+	std::iota(dots.begin(), dots.end(), 0); // Fill pivot vector
+
+	for (int c=0; c<n; c++) {
+		for (int r=0; r<n; r++) { if (r >= c ) { L(r,c) = A(r,c); } }
+	}
+
+	std::cout << L << "\n\n"; //TODO
+
+	// MatrixXd Acopy = A; // Keep a copy for analysis
+	size_t q; // Used to store the index of the maximum diagonal
+	double qmax;
+
+	// Loop over cholesky vectors
+	for (int j=0; j<n; j++) {
+		// Update dots
+		if (j>1) { for (int i=j; i<n; i++) {  dots[i] += L(i,j-1)*L(i,j-1); } }
+
+		// Find qmax and q
+		qmax = 0;
+		for (int p=j; p<n; p++) {
+			if ( L(p,p) - dots[p] > qmax ) { q = p; qmax = L(p,p)-dots[p]; }
+		}
+
+		// Stopping criterion
+		std::cout << "Qmax: "<< qmax << "\n\n";
+		if (qmax < tau) { std::cout<<"J "<<j<< "\nBreaking...\n\n"; break; }
+
+		// Swapping rows and columns
+		std::cout << "q: " << q << "\n\n";
+		if (q != j) {
+			L.row(j).swap(L.row(q));
+			L.col(j).swap(L.col(q));
+
+			// Swap dots and pivot
+			std::swap(dots[j],dots[q]);
+			std::swap(piv[j],piv[q]);
+		}
+
+
+		// Diagonals
+		L(j,j) -= dots[j];
+		L(j,j) = sqrt(L(j,j));
+
+		// Update the jth column
+		for (int k=j+1; k<n; k++) {
+			if (j>1 && j<n) {
+				for (int l=0; l<j; l++) {
+					std::cout << L << "\n\n";
+					if (k==0 && l==1) { std::cout << "HERE\n\n"; }
+					L(k,j) -= L(k,l)*L(j,l);
+				}
+			}
+
+			if (j<n) {
+				std::cout << L << "\n\n";
+				L(k,j) = L(k,j)/L(j,j);
+			}
+		}
+	} // end main loop over Cholesky vectors
+
+	MatrixXd Pm = MatrixXd::Zero(n,n);
+	for (int i=0; i<piv.size(); i++) { Pm(piv[i],i) = 1;  }
+	for (int c=0; c<n; c++) {
+		for (int r=0; r<n; r++) {
+			if (c>r) {L(r,c) = 0; }
+		}
+	}
+
+	// std::cout << A << "\n\n";
+	// std::cout << L << "\n\n";
+	std::cout << L*L.transpose()-Pm.transpose()*A*Pm << "\n\n";
+	//
+	// for (int k=0; k<n; k++) {
+	//  // std::cout << "R\n" << R << "\n\n";
+	//  std::cout << "k " << k << "\n\n";
+	//  qmax = 0;
+	//  for (int d=k; d<n; d++) {
+	//    std::cout << "d " << d << " " << A(d,d) <<"\n\n";
+	//    if (A(d,d)>qmax) {
+	//      qmax=A(d,d); q=d;
+	//      std::cout << "q and qmax " << q <<  " " << qmax << "\n";
+	//    }
+	//  }
+	//
+	//  if (qmax<tau) { std::cout<<"Qmax "<<qmax<< "\nBreaking...\n\n"; break; }
+	//
+	//  // Swap rows/cols of A and cols of R
+	//  A.col(k).swap(A.col(q));
+	//  R.col(k).swap(R.col(q));
+	//  A.row(k).swap(A.row(q));
+	//
+	//  // Keep track of swapped indices
+	//  tmppiv = piv[k]; piv[k] = piv[q]; piv[q] = tmppiv;
+	//
+	//  // Diagonal element
+	//  R(k,k) = sqrt(A(k,k));
+	//
+	//  // Rest of Cholesky vector
+	//  for (int c=k+1; c<n; c++) {
+	//    // std::cout << "R(k,k) " << R(k,k) << "\n\n";
+	//    A(c,c) -= R(k,c)*R(k,c);
+	//
+	//    for (int r=k+1; r<c; r++) { A}
+	//
+	//  }
+	//
+	// }
+	//
+	// std::cout << R << "\n\n";
+	//
+	//
+	// for (int p=0; p<piv.size(); p++) {
+	//  R.col(p).swap(R.col(piv[p]));
+	//  R.row(p).swap(R.row(piv[p]));
+	// }
+	// std::cout << R.transpose()*R -Acopy<< "\n\n";
+	// checkDecomposition(Acopy,R);
+
+	return;
+}
+
 
 void Calculate1RDM ( MatrixXd& m2, MatrixXd& m1, int& nelec ) {
 	int norb = m1.rows();
@@ -689,6 +818,38 @@ int main() {
 	//  testForRandomMatrix(i);
 	// }
 
+	if (true) {
+		int n = 4;
+		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
+		std::cout << "B\n" << B << "\n\n";
+
+		std::vector<size_t> piv(n);
+		MatrixXd L = MatrixXd::Zero(n,n);
+		PCD(B,L,piv,1e-16);
+
+		LDLT<MatrixXd> ldltOfB(B); // compute the Cholesky decomposition of A
+		MatrixXd res (n,n); res.setIdentity();
+		// MatrixXd Leigen = ldltOfB.matrixL(); // retrieve factor L  in the decomposition
+		// MatrixXd Deigen = ldltOfB.vectorD().asDiagonal();
+		// MatrixXd Peigen = ldltOfB.transpositionsP()*res;
+		res.setIdentity();
+		res = ldltOfB.transpositionsP() * res;
+		// L^* P
+		res = ldltOfB.matrixU() * res;
+		// D(L^*P)
+		res = ldltOfB.vectorD().real().asDiagonal() * res;
+		// L(DL^*P)
+		res = ldltOfB.matrixL() * res;
+		// P^T (LDL^*P)
+		res = ldltOfB.transpositionsP().transpose() * res;
+		MatrixXd Leigen = ldltOfB.matrixL();
+
+		std::cout << "The Cholesky factor L is" << std::endl << Leigen << "\n\n";
+		std::cout << "To check this, let us compute L * L.transpose()" << "\n\n";
+		std::cout << res - B << "\n\n";
+		std::cout << "This should equal the matrix A" << "\n\n";
+	}
+
 	// 4X4
 	if (false) {
 		int n = 6;
@@ -704,8 +865,8 @@ int main() {
 		// OCCScreened(B,L,bidx,1e-10);
 	}
 
-	if (true) {
-		int n = 6;
+	if (false) {
+		int n = 100;
 		// Initialize Matrix
 		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
 		//Calculate Eigenvectors/values
@@ -720,20 +881,21 @@ int main() {
 		// std::cout << lam << "\n\n"; // Check that LD was introduces correctly
 		lam(n-2,n-2)=es.eigenvalues()[n-3].real();
 		lam(n-1,n-1)=es.eigenvalues()[n-4].real();
-		lam(n-5,n-5)=es.eigenvalues()[n-4].real();
+		// lam(n-5,n-5)=es.eigenvalues()[n-4].real();
 		// std::cout << lam << "\n\n"; // Check that LD was introduces correctly
 		B = es.eigenvectors().real()*lam*es.eigenvectors().transpose().real();
 
 		//Decompose
 		// MatrixXd L (n,n); L.setZero(n,n);
 		std::vector< std::vector<double> > L;
-		for (int taue=2; taue<3; taue++) {
-			std::cout<<"=========="<<"\n";
+		for (int taue=15; taue<16; taue++) {
+			std::cout<<"================================"<<"\n";
 			std::cout<< "Tau: 1e-"<<taue<<"\n";
 			ICCScreened(B,L,pow(10,-taue));
 		}
 		MatrixXd LL(n,n); LL.setZero(n,n); //TODO
 		ICCholesky(B,LL);
+		// std::cout << LL-L << "\n\n";
 
 	}
 
