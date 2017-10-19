@@ -615,10 +615,10 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 	std::iota(piv.begin(), piv.end(), 0); // Fill pivot vector
 	std::fill(dots.begin(), dots.end(), 0); // Fill pivot vector
 
-	for (int i=0; i<n; i++) {std::cout << dots[i] << "\n\n";}
+	// for (int i=0; i<n; i++) {std::cout << dots[i] << "\n\n";} //TODO
 
 	for (int c=0; c<n; c++) {
-		for (int r=0; r<n; r++) { if (r >= c ) { L(r,c) = A(r,c); } }
+		for (int r=0; r<n; r++) { if (true) { L(r,c) = A(r,c); } } // TODO
 	}
 
 	std::cout << L << "\n\n"; //TODO
@@ -648,13 +648,17 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 
 		// Swapping rows and columns
 		std::cout << "q: " << q << "\n\n";
-		L.row(j).swap(L.row(q));
-		L.col(j).swap(L.col(q));
+		if ( q != j ){
+			std::cout << L << "\n\n";
+			L.row(j).swap(L.row(q));
+			std::cout << L << "\n\n";
+			L.col(j).swap(L.col(q));
+			std::cout << L << "\n\n";
 
-		// Swap dots and pivot
-		std::swap(dots[j],dots[q]);
-		std::swap(piv[j],piv[q]);
-
+			// Swap dots and pivot
+			std::swap(dots[j],dots[q]);
+			std::swap(piv[j],piv[q]);
+		}
 
 		// Diagonals
 		L(j,j) -= dots[j];
@@ -662,16 +666,16 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 
 		// Update the jth column
 		for (int k=j+1; k<n; k++) {
-			if (j>1 && j<n) {
+			if (j>0 && j<n) {
 				for (int l=0; l<j; l++) {
-					std::cout << L << "\n\n";
-					if (k==0 && l==1) { std::cout << "HERE\n\n"; }
+					// std::cout << L << "\n\n";
 					L(k,j) -= L(k,l)*L(j,l);
 				}
 			}
 
 			if (j<n) {
 				// std::cout << L << "\n\n";
+				if (k==1 && j==0) { std::cout << L(k,j) << " HERE\n\n"; }
 				L(k,j) = L(k,j)/L(j,j);
 			}
 		}
@@ -690,7 +694,9 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 
 	// std::cout << A << "\n\n";
 	// std::cout << L << "\n\n";
-	std::cout << L*L.transpose()-Pm.transpose()*A*Pm << "\n\n";
+	MatrixXd comp = L*L.transpose()-Pm.transpose()*A*Pm;
+	std::cout << comp << "\n\n";
+	std::cout << comp.squaredNorm() << "\n\n";
 	return;
 }
 
@@ -779,7 +785,7 @@ int main() {
 	// }
 
 	if (true) {
-		int n = 4;
+		int n = 6;
 		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
 		std::cout << "B\n" << B << "\n\n";
 
@@ -815,6 +821,7 @@ int main() {
 		std::cout << "The Cholesky factor L is" << std::endl << Leigen << "\n\n";
 		std::cout << "To check this, let us compute L * L.transpose()" << "\n\n";
 		std::cout << res - B << "\n\n";
+		std::cout << "TEST\n";
 		std::cout << test << "\n\n";
 	}
 
