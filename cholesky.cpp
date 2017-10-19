@@ -613,7 +613,9 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 	std::vector<size_t> piv (n); // Pivot vector
 	std::vector<double> dots(n); // Store accumulated dot products
 	std::iota(piv.begin(), piv.end(), 0); // Fill pivot vector
-	std::iota(dots.begin(), dots.end(), 0); // Fill pivot vector
+	std::fill(dots.begin(), dots.end(), 0); // Fill pivot vector
+
+	for (int i=0; i<n; i++) {std::cout << dots[i] << "\n\n";}
 
 	for (int c=0; c<n; c++) {
 		for (int r=0; r<n; r++) { if (r >= c ) { L(r,c) = A(r,c); } }
@@ -628,7 +630,11 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 	// Loop over cholesky vectors
 	for (int j=0; j<n; j++) {
 		// Update dots
-		if (j>1) { for (int i=j; i<n; i++) {  dots[i] += L(i,j-1)*L(i,j-1); } }
+		if (j>0) {
+			for (int i=j; i<n; i++) {
+				dots[i] += L(i,j-1)*L(i,j-1);
+			}
+		}
 
 		// Find qmax and q
 		qmax = 0;
@@ -642,14 +648,12 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 
 		// Swapping rows and columns
 		std::cout << "q: " << q << "\n\n";
-		if (q != j) {
-			L.row(j).swap(L.row(q));
-			L.col(j).swap(L.col(q));
+		L.row(j).swap(L.row(q));
+		L.col(j).swap(L.col(q));
 
-			// Swap dots and pivot
-			std::swap(dots[j],dots[q]);
-			std::swap(piv[j],piv[q]);
-		}
+		// Swap dots and pivot
+		std::swap(dots[j],dots[q]);
+		std::swap(piv[j],piv[q]);
 
 
 		// Diagonals
@@ -667,7 +671,7 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 			}
 
 			if (j<n) {
-				std::cout << L << "\n\n";
+				// std::cout << L << "\n\n";
 				L(k,j) = L(k,j)/L(j,j);
 			}
 		}
@@ -681,56 +685,12 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 		}
 	}
 
+	std::cout << L << "\n\n";
+
+
 	// std::cout << A << "\n\n";
 	// std::cout << L << "\n\n";
 	std::cout << L*L.transpose()-Pm.transpose()*A*Pm << "\n\n";
-	//
-	// for (int k=0; k<n; k++) {
-	//  // std::cout << "R\n" << R << "\n\n";
-	//  std::cout << "k " << k << "\n\n";
-	//  qmax = 0;
-	//  for (int d=k; d<n; d++) {
-	//    std::cout << "d " << d << " " << A(d,d) <<"\n\n";
-	//    if (A(d,d)>qmax) {
-	//      qmax=A(d,d); q=d;
-	//      std::cout << "q and qmax " << q <<  " " << qmax << "\n";
-	//    }
-	//  }
-	//
-	//  if (qmax<tau) { std::cout<<"Qmax "<<qmax<< "\nBreaking...\n\n"; break; }
-	//
-	//  // Swap rows/cols of A and cols of R
-	//  A.col(k).swap(A.col(q));
-	//  R.col(k).swap(R.col(q));
-	//  A.row(k).swap(A.row(q));
-	//
-	//  // Keep track of swapped indices
-	//  tmppiv = piv[k]; piv[k] = piv[q]; piv[q] = tmppiv;
-	//
-	//  // Diagonal element
-	//  R(k,k) = sqrt(A(k,k));
-	//
-	//  // Rest of Cholesky vector
-	//  for (int c=k+1; c<n; c++) {
-	//    // std::cout << "R(k,k) " << R(k,k) << "\n\n";
-	//    A(c,c) -= R(k,c)*R(k,c);
-	//
-	//    for (int r=k+1; r<c; r++) { A}
-	//
-	//  }
-	//
-	// }
-	//
-	// std::cout << R << "\n\n";
-	//
-	//
-	// for (int p=0; p<piv.size(); p++) {
-	//  R.col(p).swap(R.col(piv[p]));
-	//  R.row(p).swap(R.row(piv[p]));
-	// }
-	// std::cout << R.transpose()*R -Acopy<< "\n\n";
-	// checkDecomposition(Acopy,R);
-
 	return;
 }
 
@@ -826,12 +786,20 @@ int main() {
 		std::vector<size_t> piv(n);
 		MatrixXd L = MatrixXd::Zero(n,n);
 		PCD(B,L,piv,1e-16);
+		//
 
+		std::cout << "==================================================\n\n";
+
+		// Eigen Tests
 		LDLT<MatrixXd> ldltOfB(B); // compute the Cholesky decomposition of A
 		MatrixXd res (n,n); res.setIdentity();
-		// MatrixXd Leigen = ldltOfB.matrixL(); // retrieve factor L  in the decomposition
-		// MatrixXd Deigen = ldltOfB.vectorD().asDiagonal();
-		// MatrixXd Peigen = ldltOfB.transpositionsP()*res;
+		MatrixXd Leigen = ldltOfB.matrixL();
+		MatrixXd diag = ldltOfB.vectorD().real().asDiagonal();
+		// std::cout << diag << "\n\n";
+		for (int d=0; d<n; d++) {diag(d,d) = sqrt(diag(d,d)); }
+		// std::cout << diag << "\n\n";
+		MatrixXd test = Leigen*diag;
+
 		res.setIdentity();
 		res = ldltOfB.transpositionsP() * res;
 		// L^* P
@@ -842,12 +810,12 @@ int main() {
 		res = ldltOfB.matrixL() * res;
 		// P^T (LDL^*P)
 		res = ldltOfB.transpositionsP().transpose() * res;
-		MatrixXd Leigen = ldltOfB.matrixL();
+
 
 		std::cout << "The Cholesky factor L is" << std::endl << Leigen << "\n\n";
 		std::cout << "To check this, let us compute L * L.transpose()" << "\n\n";
 		std::cout << res - B << "\n\n";
-		std::cout << "This should equal the matrix A" << "\n\n";
+		std::cout << test << "\n\n";
 	}
 
 	// 4X4
