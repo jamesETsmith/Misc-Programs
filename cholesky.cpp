@@ -5,7 +5,8 @@
    g++ -std=c++11 -g cholesky.cpp -I/usr/local/include/eigen3/ -o cholesky
    or
    g++ -std=c++11 -g cholesky.cpp -I/home/james/Documents/Apps/eigen/ -o cholesky
-
+   or
+   g++ -std=c++11 cholesky.cpp -I/projects/jasm3285/eigen/ -o cholesky
  */
 // #include <string.h>
 // #include <stdlib.h>
@@ -234,6 +235,87 @@ void checkDecomposition(MatrixXd& M, MatrixXd& L, std::vector<double>& D,
 	norm = sqrt(norm);
 	std::cout << "Norm of comparison: " <<norm << "\n";
 	std::cout << "Number of rows truncated: " << n-nv << "\n\n";
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Reading RDM Functions ///////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+int gen3Idx(int i, int j, int k, int norb ) {
+  return i*norb*norb+j*norb+k;
+}
+
+int gen4Idx(int i, int j, int k, int l, int norb ) {
+  return i*norb*norb*norb+j*norb*norb+k*norb+l;
+}
+
+void r2RDM (char* fIn, MatrixXd& m2) {
+	char line[255];
+
+	//char const *fIn = "o2_2rdm.txt";
+	//size_t chkorbs = 8;
+	// printf("%zi\n",chkorbs);
+
+	FILE *fp = fopen( fIn, "r" );
+	fgets(line, sizeof(line), fp);
+	int norb = atoi( strtok(line, " ,\t\n") );
+	//assert (norb==chkorbs);
+	// printf("%i\n", norb);
+
+	//MatrixXd m2(norb*norb,norb*norb);
+
+	while ( fgets(line, sizeof(line), fp) != NULL ) {
+		int i = atoi( strtok(line, " ,\t\n") );
+		int j = atoi( strtok(NULL, " ,\t\n") );
+		int k = atoi( strtok(NULL, " ,\t\n") );
+		int l = atoi( strtok(NULL, " ,\t\n") );
+		double val = atof( strtok(NULL, " ,\t\n") );
+		m2(i*norb+j,k*norb+l) += val;
+	}
+	
+        return;
+}
+
+
+
+void r3RDM (char* fIn, MatrixXd& m3) {
+  char line[255];
+  FILE *fp = fopen(fIn, "r");
+  fgets(line,sizeof(line),fp);
+  int norb = atoi( strtok(line," ,\t\n") );
+
+  while (fgets(line, sizeof(line), fp) != NULL) {
+    int i = atoi( strtok(line, " ,\t\n") );
+    int j = atoi( strtok(NULL, " ,\t\n") );
+    int k = atoi( strtok(NULL, " ,\t\n") );
+    int l = atoi( strtok(NULL, " ,\t\n") );
+    int m = atoi( strtok(NULL, " ,\t\n") );
+    int n = atoi( strtok(NULL, " ,\t\n") );
+    double val = atof( strtok(NULL, " ,\t\n") );
+    m3(gen3Idx(i,j,k,norb),gen3Idx(l,m,n,norb)) += val;
+  }
+  return;
+}
+
+void r4RDM (char* fIn, MatrixXd& m4) {
+  char line[255];
+  FILE *fp = fopen(fIn, "r");
+  fgets(line,sizeof(line),fp);
+  int norb = atoi( strtok(line," ,\t\n") );
+
+  while (fgets(line, sizeof(line), fp) != NULL) {
+    int i = atoi( strtok(line, " ,\t\n") );
+    int j = atoi( strtok(NULL, " ,\t\n") );
+    int k = atoi( strtok(NULL, " ,\t\n") );
+    int l = atoi( strtok(NULL, " ,\t\n") );
+    int m = atoi( strtok(NULL, " ,\t\n") );
+    int n = atoi( strtok(NULL, " ,\t\n") );
+    int o = atoi( strtok(NULL, " ,\t\n") );
+    int p = atoi( strtok(NULL, " ,\t\n") );
+    double val = atof( strtok(NULL, " ,\t\n") );
+    m4(gen4Idx(i,j,k,l,norb),gen4Idx(m,n,o,p,norb)) += val;
+  }
+  return;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -623,7 +705,7 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 				Matrix that stores the decomposition.
 			vector<size_t>& P:
 				Vector to store the permutation indices for reordering. The permutation
-				matrix is P_mat( P[i], i ).
+				matrix is P_mat( P[i], i ). TODO merge this with piv.
 			double tau:
 				Tolerance for truncation of the decomposition.
 	*/
@@ -765,7 +847,8 @@ void testForRandomMatrix ( int rn ) {
 *******************************************************************************/
 int main() {
 	// Read in 2RDM
-	char line[255];
+	/*
+	  char line[255];
 
 	char const *fIn = "o2_2rdm.txt";
 	size_t chkorbs = 8;
@@ -787,13 +870,17 @@ int main() {
 		double val = atof( strtok(NULL, " ,\t\n") );
 		m2(i*norb+j,k*norb+l) += val;
 	}
+	*/
+
+  size_t norb = 8;
+  MatrixXd m2 = MatrixXd::Zero(norb*norb,norb*norb);
 
 	// Create 1RDM
 	MatrixXd m1(norb,norb);
 	m1 = MatrixXd::Zero(norb,norb);
 
 	int nelec = 12;
-	Calculate1RDM(m2,m1,nelec);
+	//Calculate1RDM(m2,m1,nelec);
 
 	// Test several random matrices
 	// for (int i=20; i < 21; i++) {
@@ -802,6 +889,23 @@ int main() {
 	// }
 
 	if (true) {
+	  int n = 8;
+	  char const *fIn = "../testing/cholesky/spatialRDM.0.0.txt";
+	  MatrixXd m = MatrixXd::Zero(n*n,n*n);
+	  r2RDM(fIn,m);
+
+	  std::cout << m(0,0);
+	  /*
+	  MatrixXd L = MatrixXd::Zero(n*n,n*n);
+	  std::vector<size_t> P (0);
+	  for (int taue=1; taue<11; taue++) {
+	    std::cout<< "Tau: 1e-"<<taue<<"\n";
+	    PCD(m2, t, tidx, pow(10,-taue) );
+	  }
+	  */
+	}
+
+	if (false) {
 		std::cout <<"2RDM Test\n============\n\n";
 		MatrixXd t (norb*norb,norb*norb);
 		t.setZero(norb*norb,norb*norb);
@@ -964,8 +1068,6 @@ int main() {
 			OCCholesky(m2, 1,0, pow(10,-taue), t, tidx);
 		}
 	}
-	// reorderBasis(t,tidx);
-
 
 	return 0;
 }
