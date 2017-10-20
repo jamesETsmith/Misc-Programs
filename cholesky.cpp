@@ -272,7 +272,7 @@ void r2RDM (char* fIn, MatrixXd& m2) {
 		double val = atof( strtok(NULL, " ,\t\n") );
 		m2(i*norb+j,k*norb+l) += val;
 	}
-	
+
         return;
 }
 
@@ -890,7 +890,7 @@ int main() {
 
 	if (true) {
 	  int n = 8;
-	  char const *fIn = "../testing/cholesky/spatialRDM.0.0.txt";
+	  char *fIn = "../testing/cholesky/spatialRDM.0.0.txt";
 	  MatrixXd m = MatrixXd::Zero(n*n,n*n);
 	  r2RDM(fIn,m);
 
