@@ -609,23 +609,40 @@ void OCCholesky ( MatrixXd& M, double d, double s, double tau, MatrixXd& L,
 }
 
 void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
+	/*!
+	Adapted Algorithm 3.1 from:	LAPACK-Style Codes for Level 2 and 3 Pivoted
+	Cholesky Factorizations by C. Lucas. 2004.
+
+	Here we copy the original matrix the original matrix into the new matrix L
+	that will contain our output Cholesky matrix.
+
+	Inputs:
+			MatrixXd& A:
+				Matrix to decompose.
+			MatrixXd& L:
+				Matrix that stores the decomposition.
+			vector<size_t>& P:
+				Vector to store the permutation indices for reordering. The permutation
+				matrix is P_mat( P[i], i ).
+			double tau:
+				Tolerance for truncation of the decomposition.
+	*/
+
 	size_t n = A.rows();
 	std::vector<size_t> piv (n); // Pivot vector
 	std::vector<double> dots(n); // Store accumulated dot products
 	std::iota(piv.begin(), piv.end(), 0); // Fill pivot vector
-	std::fill(dots.begin(), dots.end(), 0); // Fill pivot vector
-
-	// for (int i=0; i<n; i++) {std::cout << dots[i] << "\n\n";} //TODO
+	std::fill(dots.begin(), dots.end(), 0); // Fill dots vector W/ ZEROS
 
 	for (int c=0; c<n; c++) {
 		for (int r=0; r<n; r++) { if (true) { L(r,c) = A(r,c); } } // TODO
 	}
 
-	std::cout << L << "\n\n"; //TODO
 
 	// MatrixXd Acopy = A; // Keep a copy for analysis
 	size_t q; // Used to store the index of the maximum diagonal
 	double qmax;
+	size_t lrank = n;
 
 	// Loop over cholesky vectors
 	for (int j=0; j<n; j++) {
@@ -643,17 +660,17 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 		}
 
 		// Stopping criterion
-		std::cout << "Qmax: "<< qmax << "\n\n";
-		if (qmax < tau) { std::cout<<"J "<<j<< "\nBreaking...\n\n"; break; }
+		if (qmax < tau) {
+			lrank = j-1;
+			std::cout<<"Exiting decomposition early...   ";
+			std::cout<< "Rank of L: " << lrank << "   ";
+			break;
+		}
 
 		// Swapping rows and columns
-		std::cout << "q: " << q << "\n\n";
 		if ( q != j ){
-			std::cout << L << "\n\n";
 			L.row(j).swap(L.row(q));
-			std::cout << L << "\n\n";
 			L.col(j).swap(L.col(q));
-			std::cout << L << "\n\n";
 
 			// Swap dots and pivot
 			std::swap(dots[j],dots[q]);
@@ -668,14 +685,11 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 		for (int k=j+1; k<n; k++) {
 			if (j>0 && j<n) {
 				for (int l=0; l<j; l++) {
-					// std::cout << L << "\n\n";
 					L(k,j) -= L(k,l)*L(j,l);
 				}
 			}
 
 			if (j<n) {
-				// std::cout << L << "\n\n";
-				if (k==1 && j==0) { std::cout << L(k,j) << " HERE\n\n"; }
 				L(k,j) = L(k,j)/L(j,j);
 			}
 		}
@@ -685,18 +699,21 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 	for (int i=0; i<piv.size(); i++) { Pm(piv[i],i) = 1;  }
 	for (int c=0; c<n; c++) {
 		for (int r=0; r<n; r++) {
-			if (c>r) {L(r,c) = 0; }
+			if (c>r) { L(r,c) = 0; }
+			if (c>lrank) { L(r,c) = 0; }
 		}
 	}
 
-	std::cout << L << "\n\n";
-
-
-	// std::cout << A << "\n\n";
-	// std::cout << L << "\n\n";
+	// Printing Results
+	// std::cout << "==================================================\n\n";
 	MatrixXd comp = L*L.transpose()-Pm.transpose()*A*Pm;
-	std::cout << comp << "\n\n";
-	std::cout << comp.squaredNorm() << "\n\n";
+
+	if (n<21) {
+		std::cout << L << "\n\n";
+		std::cout << comp << "\n\n";
+	}
+
+	std::cout << "Norm of comparison: " << comp.squaredNorm() << "\n\n";
 	return;
 }
 
@@ -785,18 +802,78 @@ int main() {
 	// }
 
 	if (true) {
+		std::cout <<"2RDM Test\n============\n\n";
+		MatrixXd t (norb*norb,norb*norb);
+		t.setZero(norb*norb,norb*norb);
+
+		std::vector<size_t> tidx (0);
+		for (int taue=1; taue<11; taue++) {
+			std::cout<< "Tau: 1e-"<<taue<<"\n";
+			PCD(m2, t, tidx, pow(10,-taue) );
+		}
+	}
+
+
+	if (false) {
+		int n = 100;
+		// Initialize Matrix
+		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
+
+		//Calculate Eigenvectors/values
+		EigenSolver<MatrixXd> es(B);
+
+		//Change Eigenvalues to turn on degeneracy
+		MatrixXd lam = MatrixXd::Zero(n,n);
+		for (int r=0; r<n; r++)
+			for (int c=0; c<n; c++) {
+				if (r==c) {lam(c,c)=es.eigenvalues()[c].real(); }
+			}
+
+		// Add degeneracy
+		for (int d=0; d<n/2; d++) {
+			lam(2*d+1,2*d+1) = 2 * es.eigenvalues()[2*d].real();
+			es.eigenvectors().col(2*d+1) = 2*es.eigenvectors().col(2*d);
+		}
+
+		// Recombine
+		B = es.eigenvectors().real()*lam*es.eigenvectors().transpose().real();
+
+		// Run Tests
+		std::vector<size_t> piv(n);
+		MatrixXd L = MatrixXd::Zero(n,n);
+
+		for (int taue=2; taue<16; taue++) {
+			std::cout << "Tau = " << pow(10,-taue) << "    ";
+			if (n<21) { std::cout << "\n";}
+			PCD(B,L,piv,pow(10,-taue));
+		}
+	}
+
+	if (false) {
+		for (int n=80; n<100; n++) {
+			MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
+			// std::cout << "B\n" << B << "\n\n";
+			std::cout << "n = " << n << "   ";//<< "\n";
+
+			std::vector<size_t> piv(n);
+			MatrixXd L = MatrixXd::Zero(n,n);
+			PCD(B,L,piv,1e-16);
+		}
+	}
+
+	if (false) {
+
 		int n = 6;
 		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
-		std::cout << "B\n" << B << "\n\n";
+		// std::cout << "B\n" << B << "\n\n";
+		std::cout << "n = " << n << "\n\n";//<< "\n";
 
 		std::vector<size_t> piv(n);
 		MatrixXd L = MatrixXd::Zero(n,n);
 		PCD(B,L,piv,1e-16);
-		//
-
-		std::cout << "==================================================\n\n";
 
 		// Eigen Tests
+		std::cout << "==================================================\n\n";
 		LDLT<MatrixXd> ldltOfB(B); // compute the Cholesky decomposition of A
 		MatrixXd res (n,n); res.setIdentity();
 		MatrixXd Leigen = ldltOfB.matrixL();
