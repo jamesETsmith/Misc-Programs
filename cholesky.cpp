@@ -242,43 +242,43 @@ void checkDecomposition(MatrixXd& M, MatrixXd& L, std::vector<double>& D,
 // Reading RDM Functions ///////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 int gen3Idx(int i, int j, int k, int norb ) {
-  return i*norb*norb+j*norb+k;
+  return i*norb*norb + j*norb + k;
 }
 
 int gen4Idx(int i, int j, int k, int l, int norb ) {
   return i*norb*norb*norb+j*norb*norb+k*norb+l;
 }
 
-void r2RDM (char* fIn, MatrixXd& m2) {
-	char line[255];
+void r2RDM (const char* fIn, MatrixXd& m2) {
+  char line[255];
 
-	//char const *fIn = "o2_2rdm.txt";
-	//size_t chkorbs = 8;
-	// printf("%zi\n",chkorbs);
+  //char const *fIn = "o2_2rdm.txt";
+  //size_t chkorbs = 8;
+  // printf("%zi\n",chkorbs);
+  
+  FILE *fp = fopen( fIn, "r" );
+  fgets(line, sizeof(line), fp);
+  int norb = atoi( strtok(line, " ,\t\n") );
+  //assert (norb==chkorbs);
+  // printf("%i\n", norb);
+  
+  //MatrixXd m2(norb*norb,norb*norb);
 
-	FILE *fp = fopen( fIn, "r" );
-	fgets(line, sizeof(line), fp);
-	int norb = atoi( strtok(line, " ,\t\n") );
-	//assert (norb==chkorbs);
-	// printf("%i\n", norb);
+  while ( fgets(line, sizeof(line), fp) != NULL ) {
+    int i = atoi( strtok(line, " ,\t\n") );
+    int j = atoi( strtok(NULL, " ,\t\n") );
+    int k = atoi( strtok(NULL, " ,\t\n") );
+    int l = atoi( strtok(NULL, " ,\t\n") );
+    double val = atof( strtok(NULL, " ,\t\n") );
+    m2(i*norb+j,k*norb+l) += val;
+  }
 
-	//MatrixXd m2(norb*norb,norb*norb);
-
-	while ( fgets(line, sizeof(line), fp) != NULL ) {
-		int i = atoi( strtok(line, " ,\t\n") );
-		int j = atoi( strtok(NULL, " ,\t\n") );
-		int k = atoi( strtok(NULL, " ,\t\n") );
-		int l = atoi( strtok(NULL, " ,\t\n") );
-		double val = atof( strtok(NULL, " ,\t\n") );
-		m2(i*norb+j,k*norb+l) += val;
-	}
-
-        return;
+  return;
 }
 
 
 
-void r3RDM (char* fIn, MatrixXd& m3) {
+void r3RDM (const char* fIn, MatrixXd& m3) {
   char line[255];
   FILE *fp = fopen(fIn, "r");
   fgets(line,sizeof(line),fp);
@@ -297,7 +297,7 @@ void r3RDM (char* fIn, MatrixXd& m3) {
   return;
 }
 
-void r4RDM (char* fIn, MatrixXd& m4) {
+void r4RDM (const char* fIn, MatrixXd& m4) {
   char line[255];
   FILE *fp = fopen(fIn, "r");
   fgets(line,sizeof(line),fp);
@@ -721,7 +721,6 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 	}
 
 
-	// MatrixXd Acopy = A; // Keep a copy for analysis
 	size_t q; // Used to store the index of the maximum diagonal
 	double qmax;
 	size_t lrank = n;
@@ -745,6 +744,7 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 		if (qmax < tau) {
 			lrank = j-1;
 			std::cout<<"Exiting decomposition early...   ";
+			std::cout<<"Qmax = " <<qmax << "   ";
 			std::cout<< "Rank of L: " << lrank << "   ";
 			break;
 		}
@@ -777,8 +777,11 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 		}
 	} // end main loop over Cholesky vectors
 
+	// Build Permutation matrix
 	MatrixXd Pm = MatrixXd::Zero(n,n);
 	for (int i=0; i<piv.size(); i++) { Pm(piv[i],i) = 1;  }
+
+	// Setting values of L above diagonal to zero (TODO)
 	for (int c=0; c<n; c++) {
 		for (int r=0; r<n; r++) {
 			if (c>r) { L(r,c) = 0; }
@@ -787,7 +790,6 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 	}
 
 	// Printing Results
-	// std::cout << "==================================================\n\n";
 	MatrixXd comp = L*L.transpose()-Pm.transpose()*A*Pm;
 
 	if (n<21) {
@@ -888,21 +890,61 @@ int main() {
 	//  testForRandomMatrix(i);
 	// }
 
-	if (true) {
+	if (false) {
 	  int n = 8;
-	  char *fIn = "../testing/cholesky/spatialRDM.0.0.txt";
+	  const char *fIn = "../testing/cholesky/spatialRDM.0.0.txt";
+	  //	  int n = 22;
+	  //	  const char *fIn = "../testing/cholesky/5cene_2rdm.txt";
+
+	  //int n=29;
+	  //const char *fIn = "fep_2rdm.txt";
+
+	  // 2RDM
+	  std::cout <<"2RDM Test\n===========================\n\n";
+	  std::cout << "Full number of rows = " << n*n << "\n\n";
 	  MatrixXd m = MatrixXd::Zero(n*n,n*n);
 	  r2RDM(fIn,m);
 
-	  std::cout << m(0,0);
-	  /*
 	  MatrixXd L = MatrixXd::Zero(n*n,n*n);
 	  std::vector<size_t> P (0);
-	  for (int taue=1; taue<11; taue++) {
+	  for (int taue=1; taue<10; taue++) {
 	    std::cout<< "Tau: 1e-"<<taue<<"\n";
-	    PCD(m2, t, tidx, pow(10,-taue) );
+	    PCD(m, L, P, pow(10,-taue) );
+	  }
+	  
+	  // 3RDM
+	  std::cout <<"3RDM Test\n===========================\n\n";
+	  MatrixXd m3 = MatrixXd::Zero(n*n*n,n*n*n);
+	  const char *fIn3 = "../testing/cholesky/spatial3RDM.0.0.txt";
+	  r3RDM(fIn3,m3);
+	  MatrixXd L3 = MatrixXd::Zero(n*n*n,n*n*n);
+	  std::cout << L3.rows() << "\n\n";
+	  //std::cout << m3(7*64+7*8+6,7*64+7*8+6) << "\n\n";
+	  //std::cout << 
+
+	  std::vector<size_t> P3;
+	  for (int taue=1; taue<16; taue++) {
+	    std::cout<< "Tau: 1e-"<<taue<<"\n";
+	    PCD(m3, L3, P3, pow(10,-taue) );
+	  }
+	  
+
+	  // 4RDM
+	  /*std::cout <<"4RDM Test\n===========================\n\n";
+	  MatrixXd m4 = MatrixXd::Zero(n*n*n*n,n*n*n*n);
+	  r4RDM("../testing/cholesky/spatial4RDM.0.0.txt",m4);
+	  MatrixXd L4 = MatrixXd::Zero(n*n*n*n,n*n*n*n);
+	  std::cout << L4.rows() << "\n\n";
+	  std::cout << m4(1,7) << "\n\n";
+	  //std::cout << 
+
+	  std::vector<size_t> P4;
+	  for (int taue=6; taue<7; taue++) {
+	    std::cout<< "Tau: 1e-"<<taue<<"\n";
+	    PCD(m4, L4, P4, pow(10,-taue) );
 	  }
 	  */
+
 	}
 
 	if (false) {
@@ -918,8 +960,8 @@ int main() {
 	}
 
 
-	if (false) {
-		int n = 100;
+	if (true) {
+		int n = 400;
 		// Initialize Matrix
 		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
 
@@ -935,8 +977,8 @@ int main() {
 
 		// Add degeneracy
 		for (int d=0; d<n/2; d++) {
-			lam(2*d+1,2*d+1) = 2 * es.eigenvalues()[2*d].real();
-			es.eigenvectors().col(2*d+1) = 2*es.eigenvectors().col(2*d);
+		  lam(2*d+1,2*d+1) = 0;//2 * es.eigenvalues()[2*d].real();
+			//es.eigenvectors().col(2*d+1) = 2*es.eigenvectors().col(2*d);
 		}
 
 		// Recombine
@@ -954,7 +996,7 @@ int main() {
 	}
 
 	if (false) {
-		for (int n=80; n<100; n++) {
+		for (int n=100; n<150; n++) {
 			MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
 			// std::cout << "B\n" << B << "\n\n";
 			std::cout << "n = " << n << "   ";//<< "\n";
