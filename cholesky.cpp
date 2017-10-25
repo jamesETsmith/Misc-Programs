@@ -9,7 +9,7 @@
    g++ -std=c++11 cholesky.cpp -I/projects/jasm3285/eigen/ -o cholesky
  */
 // #include <string.h>
-// #include <stdlib.h>
+#include <stdlib.h>
 // #include <complex.h>
 #include <stdio.h>
 #include <assert.h>
@@ -201,7 +201,7 @@ void r3RDM (const char* fIn, MatrixXd& m3) {
     int m = atoi( strtok(NULL, " ,\t\n") );
     int n = atoi( strtok(NULL, " ,\t\n") );
     double val = atof( strtok(NULL, " ,\t\n") );
-    m3(gen3Idx(i,j,k,norb),gen3Idx(l,m,n,norb)) += val;
+    m3(gen3Idx(i,j,k,norb),gen3Idx(n,m,l,norb)) += val;
   }
   return;
 }
@@ -222,7 +222,7 @@ void r4RDM (const char* fIn, MatrixXd& m4) {
     int o = atoi( strtok(NULL, " ,\t\n") );
     int p = atoi( strtok(NULL, " ,\t\n") );
     double val = atof( strtok(NULL, " ,\t\n") );
-    m4(gen4Idx(i,j,k,l,norb),gen4Idx(m,n,o,p,norb)) += val;
+    m4(gen4Idx(i,j,k,l,norb),gen4Idx(p,o,m,n,norb)) += val;
   }
   return;
 }
@@ -298,24 +298,27 @@ void ICCScreened ( MatrixXd& M, std::vector<std::vector<double> >& L,
 
 
 void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
-	/*!
-	Adapted Algorithm 3.1 from:	LAPACK-Style Codes for Level 2 and 3 Pivoted
-	Cholesky Factorizations by C. Lucas. 2004.
-
-	Here we copy the original matrix the original matrix into the new matrix L
-	that will contain our output Cholesky matrix.
-
-	Inputs:
-			MatrixXd& A:
-				Matrix to decompose.
-			MatrixXd& L:
-				Matrix that stores the decomposition.
-			vector<size_t>& P:
-				Vector to store the permutation indices for reordering. The permutation
-				matrix is P_mat( P[i], i ). TODO merge this with piv.
-			double tau:
-				Tolerance for truncation of the decomposition.
-	*/
+  /*!
+    Adapted Algorithm 3.1 from:	LAPACK-Style Codes for Level 2 and 3 Pivoted
+    Cholesky Factorizations by C. Lucas. 2004.
+    
+    Here we copy the original matrix the original matrix into the new matrix L
+    that will contain our output Cholesky matrix.
+    
+    NOTE: Ordering of RDM matrix must be c0 c1 c2 d2 d1 d0 where c0 is paired
+    with d2, c1 is paired with d1, and c2 is paired with d0.
+    
+    Inputs:
+      MatrixXd& A:
+        Matrix to decompose.
+      MatrixXd& L:
+         Matrix that stores the decomposition.
+      vector<size_t>& P:
+        Vector to store the permutation indices for reordering. The permutation
+        matrix is P_mat( P[i], i ). TODO merge this with piv.
+      double tau:
+        Tolerance for truncation of the decomposition.
+  */
 
 	size_t n = A.rows();
 	std::vector<size_t> piv (n); // Pivot vector
@@ -350,9 +353,9 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 		// Stopping criterion
 		if (qmax < tau) {
 			lrank = j-1;
-			std::cout<<"Exiting decomposition early...   ";
-			std::cout<<"Qmax = " <<qmax << "   ";
-			std::cout<< "Rank of L: " << lrank << "   ";
+			//std::cout<<"Exiting decomposition early...   ";
+			//std::cout<<"Qmax = " <<qmax << "   ";
+			//std::cout<< "Rank of L: " << lrank << "   ";
 			break;
 		}
 
@@ -398,63 +401,67 @@ void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
 
 	// Printing Results
 	MatrixXd comp = L*L.transpose()-Pm.transpose()*A*Pm;
-
-	if (n<21) {
-		std::cout << L << "\n\n";
-		std::cout << comp << "\n\n";
-	}
-
-	std::cout << "Norm of comparison: " << comp.squaredNorm() << "\n\n";
+	std::cout << tau << "\t";
+	std::cout <<  comp.squaredNorm() << "\t";
+	std::cout << A.rows() << "\t";
+	std::cout << lrank << "\n";
 	return;
 }
 
 
-void Calculate1RDM ( MatrixXd& m2, MatrixXd& m1, int& nelec ) {
-	int norb = m1.rows();
+void Test2RDM ( MatrixXd& m2, int& nelec, int& norb ) {
+  MatrixXd m1 = MatrixXd::Zero(norb,norb);
 
-	for (int i=0; i < norb; i++ ) {
-		for (int j=0; j < norb; j++ ) {
-			// m1(i,j) = 0;
-			// std::cout << i << " " << j << std::endl;
-			for (int k=0; k < norb; k++ ) {
-				m1(i,j) += m2(i*norb+k,j*norb+k)/(nelec-1);
-			}
-		}
+  for (int i=0; i < norb; i++ ) {
+    for (int j=0; j < norb; j++ ) {
+      for (int k=0; k < norb; k++ ) {
+	m1(i,j) += m2(i*norb+k,j*norb+k)/(nelec-1);
+      }
+    }
+  }
+  
+  double chkelec = 0;
+  for (int i=0; i < norb; i++ ) {
+    chkelec += m1(i,i);
+  }
+  
+  std::cout << "Check Electrons " << chkelec << std::endl; //TODO
+}
+
+void Test3RDM ( MatrixXd& m3, int& nelec, int& norb ) {
+  MatrixXd m2 = MatrixXd::Zero(norb*norb,norb*norb);
+
+  for (int i=0; i<norb; i++) {
+    for (int j=0; j<norb; j++) {
+      for (int k=0; k<norb; k++) {
+	for (int l=0; l<norb; l++) {
+	  for (int m=0; m<norb; m++) {
+	    m2(i*norb+j,l*norb+k)+= m3(gen3Idx(i,j,m,norb),gen3Idx(m,k,l,norb));
+	    m2(i*norb+j,l*norb+k) /= (nelec-2);
+	  }
 	}
+      }
+    }
+  }
 
-	double chkelec = 0;
-	for (int i=0; i < norb; i++ ) {
-		chkelec += m1(i,i);
-	}
-
-	std::cout << chkelec << std::endl; //TODO
+  MatrixXd m1;
+  Test2RDM(m2,nelec,norb);
+    
 }
 
 
 /*******************************************************************************
 ******************************** Main ******************************************
 *******************************************************************************/
-int main() {
+int main(int argc, char** argv) {
 
-  size_t norb = 8;
-  MatrixXd m2 = MatrixXd::Zero(norb*norb,norb*norb);
 
-	// Create 1RDM
-	MatrixXd m1(norb,norb);
-	m1 = MatrixXd::Zero(norb,norb);
+	if (true) {
+	  if (argc == 1) { return -1; }
 
-	int nelec = 12;
-	//Calculate1RDM(m2,m1,nelec);
-
-	// Test several random matrices
-	// for (int i=20; i < 21; i++) {
-	//  std::cout << "Size of random matrix " << i << "\n\n";
-	//  testForRandomMatrix(i);
-	// }
-
-	if (false) {
-	  int n = 8;
-	  const char *fIn = "../testing/cholesky/spatialRDM.0.0.txt";
+	  int n = atoi(argv[1]);
+	  int nelec = atoi(argv[2]);
+	  const char *fIn = "./spatialRDM.0.0.txt";
 	  //	  int n = 22;
 	  //	  const char *fIn = "../testing/cholesky/5cene_2rdm.txt";
 
@@ -464,29 +471,33 @@ int main() {
 	  // 2RDM
 	  std::cout <<"2RDM Test\n===========================\n\n";
 	  std::cout << "Full number of rows = " << n*n << "\n\n";
+	  std::cout << "Error Tol.\tNorm\tA Rank\tL Rank\n";
 	  MatrixXd m = MatrixXd::Zero(n*n,n*n);
 	  r2RDM(fIn,m);
 
 	  MatrixXd L = MatrixXd::Zero(n*n,n*n);
 	  std::vector<size_t> P (0);
-	  for (int taue=1; taue<10; taue++) {
-	    std::cout<< "Tau: 1e-"<<taue<<"\n";
+	  for (int taue=1; taue<11; taue++) {
+	    //std::cout<< "Tau: 1e-"<<taue<<"\n";
 	    PCD(m, L, P, pow(10,-taue) );
 	  }
 	  
 	  // 3RDM
 	  std::cout <<"3RDM Test\n===========================\n\n";
+	  std::cout << "Error Tol.\tNorm\tA Rank\tL Rank\n";
 	  MatrixXd m3 = MatrixXd::Zero(n*n*n,n*n*n);
-	  const char *fIn3 = "../testing/cholesky/spatial3RDM.0.0.txt";
+	  const char *fIn3 = "./spatial3RDM.0.0.txt";
 	  r3RDM(fIn3,m3);
+	  Test3RDM(m3,nelec,n);
+	  
 	  MatrixXd L3 = MatrixXd::Zero(n*n*n,n*n*n);
 	  std::cout << L3.rows() << "\n\n";
 	  //std::cout << m3(7*64+7*8+6,7*64+7*8+6) << "\n\n";
 	  //std::cout << 
 
 	  std::vector<size_t> P3;
-	  for (int taue=1; taue<16; taue++) {
-	    std::cout<< "Tau: 1e-"<<taue<<"\n";
+	  for (int taue=1; taue<11; taue++) {
+	    //std::cout<< "Tau: 1e-"<<taue<<"\n";
 	    PCD(m3, L3, P3, pow(10,-taue) );
 	  }
 	  
@@ -501,28 +512,17 @@ int main() {
 	  //std::cout << 
 
 	  std::vector<size_t> P4;
-	  for (int taue=6; taue<7; taue++) {
+	  for (int taue=1; taue<10; taue++) {
 	    std::cout<< "Tau: 1e-"<<taue<<"\n";
 	    PCD(m4, L4, P4, pow(10,-taue) );
-	  }
-	  */
+	  }*/
+	  
 
 	}
+
+
 
 	if (false) {
-		std::cout <<"2RDM Test\n============\n\n";
-		MatrixXd t (norb*norb,norb*norb);
-		t.setZero(norb*norb,norb*norb);
-
-		std::vector<size_t> tidx (0);
-		for (int taue=1; taue<11; taue++) {
-			std::cout<< "Tau: 1e-"<<taue<<"\n";
-			PCD(m2, t, tidx, pow(10,-taue) );
-		}
-	}
-
-
-	if (true) {
 		int n = 400;
 		// Initialize Matrix
 		MatrixXd B = MatrixXd::Random(n,n); B = B*B; B = B * B.transpose();
