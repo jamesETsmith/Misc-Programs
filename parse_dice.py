@@ -7,7 +7,37 @@ Must be executed from the main Dice directory and will create a temporary
 directory for the .rst files at the same level as the main Dice directory so
 they will not be changed when the user switches branches to the gh-pages branch.
 
-Skeleton Format Example:
+Make sure that your comments follow the proper indentation of the tree that
+appears in the documentation of a function or class with look messy and jumbled.
+
+Skeleton Format Example for Function
+------------------------------------
+bool SomeFunc(int Input1, std::vector<int>& Input2) {
+    /*!
+    Function description
+
+
+    .. note:: Some note
+
+    :Inputs:
+
+        int Input1:
+            description
+        std::vector<int>& Input2:
+            description
+
+    //(if you return an object)
+    :Returns:
+
+        bool Output1:
+            description
+
+    */
+
+Documentation of classes should follow the same pattern of indentation and
+should include descriptions of private/public objects and just names of
+functions. Document any important functions in the class as shown above and
+they should be picked up by the parser automatically.
 '''
 import os, sys
 
@@ -18,11 +48,17 @@ comm_start = '/*!'
 comm_end = '*/'
 data_types = ["bool","char","CItype","double","int","string","void"]
 obj_types = ["class"]
-func_direc = ".. cpp:function::"
+func_direc = ".. cpp:function:: "
+class_direc = ".. cpp:class:: "
 
 #################
 ### Functions ###
 #################
+def SearchForCommStart(content, line, start_seq):
+    for l in range(line,line+5):
+        if (len(content[l].split()) > 0 and content[l].split()[0] == start_seq):
+            return True
+    return False
 
 def ParseFile(file_name, comments):
     '''
@@ -34,20 +70,28 @@ def ParseFile(file_name, comments):
         content = f.readlines()
 
     for l in range(len(content)):
-        # if (len(content[l].split()) == 0 and in_comment): continue
-
+        # Get Function/Class Call
         if (len(content[l].split()) != 0 and
-            content[l].split()[0] in data_types and
+            (content[l].split()[0] in data_types or
+            content[l].split()[0] in obj_types) and
             content[l].split()[-1] == "{"):
+
             if (content[l].count("(") - content[l].count(")") == 0):
-                comments.append(func_direc + content[l].translate(None,"{") +\
-                 "\n\n")
+                if (SearchForCommStart(content,l,comm_start)):
+                    if (content[l].split()[0] in data_types):
+                        comments.append(func_direc +
+                        content[l].translate(None,"{")+"\n\n")
+                    elif (content[l].split()[0] in obj_types):
+                        comments.append(class_direc +
+                        content[l].translate(None,"{")[5:]+
+                        "\n\n")
 
             else:
                 open_count = content[l].count("(")
                 close_count = content[l].count(")")
                 function_call = content[l]
 
+                # Search backwards for start of call    
                 for i in range(1,20):
                     open_count += content[l-i].count("(")
                     close_count += content[l-i].count(")")
@@ -56,14 +100,23 @@ def ParseFile(file_name, comments):
 
                     if (open_count == close_count):
                         function_call = function_call.translate(None,"{")
-                        comments.append(func_direc + function_call + "\n\n")
+                        function_call = function_call.translate(None,"\n")
+                        if (SearchForCommStart(content,l,comm_start)):
+                            comments.append(func_direc + function_call + "\n\n")
                         break
 
-        if (in_comment == False): continue
-        if (in_comment == True): comments.append("\n"); continue
+        # Get Comments
+        if (len(content[l].split()) >0 and content[l].split()[0] == comm_start):
+            in_comment = True
 
-        if (content[l].split()[0] == comm_start): in_comment = True
-        if (content[l].split()[0] == comm_end): in_comment = False
+        if (in_comment == False): continue
+        if (in_comment == True and len(content[l].split()) == 0 ):
+            comments.append("\n"); continue
+
+        if (content[l].split()[0] == comm_end):
+            in_comment = False
+            comments.append("\n\n")
+
         if (in_comment):
             comments.append(content[l])
 
@@ -101,5 +154,6 @@ if __name__ == '__main__':
     # Read/Write File(s)
     for i in range(len(files_to_parse)):
         comments = []
-        ParseFile(files_to_parse[0],comments)
-        WriteRST(comments,files_to_parse[0])
+        print files_to_parse[i]
+        ParseFile(files_to_parse[i],comments)
+        WriteRST(comments,files_to_parse[i])

@@ -297,7 +297,7 @@ void ICCScreened ( MatrixXd& M, std::vector<std::vector<double> >& L,
 }
 
 
-void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) { 
+void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
   /*!
     Adapted Algorithm 3.1 from:	LAPACK-Style Codes for Level 2 and 3 Pivoted
     Cholesky Factorizations by C. Lucas. 2004.
