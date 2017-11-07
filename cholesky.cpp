@@ -172,7 +172,7 @@ void r2RDM (const char* fIn, MatrixXd& m2) {
   FILE *fp = fopen( fIn, "r" );
   fgets(line, sizeof(line), fp);
   int norb = atoi( strtok(line, " ,\t\n") );
-  
+
   while ( fgets(line, sizeof(line), fp) != NULL ) {
     int i = atoi( strtok(line, " ,\t\n") );
     int j = atoi( strtok(NULL, " ,\t\n") );
@@ -297,18 +297,18 @@ void ICCScreened ( MatrixXd& M, std::vector<std::vector<double> >& L,
 }
 
 
-void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) {
+void PCD ( MatrixXd& A, MatrixXd& L, std::vector<size_t>& P, double tau ) { 
   /*!
     Adapted Algorithm 3.1 from:	LAPACK-Style Codes for Level 2 and 3 Pivoted
     Cholesky Factorizations by C. Lucas. 2004.
-    
+
     Here we copy the original matrix the original matrix into the new matrix L
     that will contain our output Cholesky matrix.
-    
-    NOTE: Ordering of RDM matrix must be c0 c1 c2 d2 d1 d0 where c0 is paired
-    with d2, c1 is paired with d1, and c2 is paired with d0.
-    
-    Inputs:
+
+    .. note:: Ordering of RDM matrix must be c0 c1 c2 d2 d1 d0 where c0 is paired with d2, c1 is paired with d1, and c2 is paired with d0.
+
+    :Inputs:
+
       MatrixXd& A:
         Matrix to decompose.
       MatrixXd& L:
@@ -419,12 +419,12 @@ void Test2RDM ( MatrixXd& m2, int& nelec, int& norb ) {
       }
     }
   }
-  
+
   double chkelec = 0;
   for (int i=0; i < norb; i++ ) {
     chkelec += m1(i,i);
   }
-  
+
   std::cout << "Check Electrons " << chkelec << std::endl; //TODO
 }
 
@@ -446,7 +446,7 @@ void Test3RDM ( MatrixXd& m3, int& nelec, int& norb ) {
 
   MatrixXd m1;
   Test2RDM(m2,nelec,norb);
-    
+
 }
 
 
@@ -481,7 +481,7 @@ int main(int argc, char** argv) {
 	    //std::cout<< "Tau: 1e-"<<taue<<"\n";
 	    PCD(m, L, P, pow(10,-taue) );
 	  }
-	  
+
 	  // 3RDM
 	  std::cout <<"3RDM Test\n===========================\n\n";
 	  std::cout << "Error Tol.\tNorm\tA Rank\tL Rank\n";
@@ -489,18 +489,18 @@ int main(int argc, char** argv) {
 	  const char *fIn3 = "./spatial3RDM.0.0.txt";
 	  r3RDM(fIn3,m3);
 	  Test3RDM(m3,nelec,n);
-	  
+
 	  MatrixXd L3 = MatrixXd::Zero(n*n*n,n*n*n);
 	  std::cout << L3.rows() << "\n\n";
 	  //std::cout << m3(7*64+7*8+6,7*64+7*8+6) << "\n\n";
-	  //std::cout << 
+	  //std::cout <<
 
 	  std::vector<size_t> P3;
 	  for (int taue=1; taue<11; taue++) {
 	    //std::cout<< "Tau: 1e-"<<taue<<"\n";
 	    PCD(m3, L3, P3, pow(10,-taue) );
 	  }
-	  
+
 
 	  // 4RDM
 	  /*std::cout <<"4RDM Test\n===========================\n\n";
@@ -509,14 +509,14 @@ int main(int argc, char** argv) {
 	  MatrixXd L4 = MatrixXd::Zero(n*n*n*n,n*n*n*n);
 	  std::cout << L4.rows() << "\n\n";
 	  std::cout << m4(1,7) << "\n\n";
-	  //std::cout << 
+	  //std::cout <<
 
 	  std::vector<size_t> P4;
 	  for (int taue=1; taue<10; taue++) {
 	    std::cout<< "Tau: 1e-"<<taue<<"\n";
 	    PCD(m4, L4, P4, pow(10,-taue) );
 	  }*/
-	  
+
 
 	}
 
