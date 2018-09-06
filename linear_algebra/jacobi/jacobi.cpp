@@ -1,12 +1,11 @@
 #include <math.h> /* sqrt */
 #include <mpi.h>
-#include <stdlib.h>
 #include <array>
 #include <fstream>
 #include <iostream>
 #include <string>
 
-const size_t N = 100;
+const size_t N = 1000;
 
 typedef std::array<std::array<double, N>, N> Mat2d;
 
@@ -44,7 +43,7 @@ std::array<double, N> jacobi(const size_t maxiter) {
   Mat2d A;
   std::array<double, N> b;
   std::array<double, N> ans;
-  std::array<double, N> x_old;
+  std::array<double, N> x_old = {0};
   readMatrix(A);
   readVector(b, "jacobi_vector.txt");
   readVector(ans, "jacobi_ans.txt");
